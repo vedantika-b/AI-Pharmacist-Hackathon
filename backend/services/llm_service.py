@@ -1,0 +1,137 @@
+"""
+LLM Service for intent extraction using Groq llama-3.1-8b-instant.
+Implements structured JSON output for reliable parsing.
+"""
+
+from groq import Groq
+import json
+from typing import Optional
+from core.config import get_settings
+from models.schemas import LLMIntentOutput, IntentType, ExtractedMedication
+import logging
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+class LLMService:
+    """Service for interacting with Groq LLM API."""
+    
+    def __init__(self):
+        self.client = Groq(api_key=settings.groq_api_key)
+        self.model = settings.groq_model
+        self.temperature = settings.groq_temperature
+        self.max_tokens = settings.groq_max_tokens
+    
+    async def extract_intent(
+        self,
+        user_message: str,
+        user_context: Optional[dict] = None
+    ) -> LLMIntentOutput:
+        """
+        Extract intent and entities from user message.
+        
+        Args:
+            user_message: Raw user input
+            user_context: Optional context (prescriptions, order history)
+        
+        Returns:
+            LLMIntentOutput with structured intent data
+        """
+        try:
+            system_prompt = self._build_system_prompt()
+            user_prompt = self._build_user_prompt(user_message, user_context)
+            
+            # Call Groq API with JSON mode
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                response_format={"type": "json_object"}  # Force JSON output
+            )
+            
+            # Parse and validate response
+            raw_output = response.choices[0].message.content
+            logger.info(f"LLM raw output: {raw_output}")
+            
+            parsed = json.loads(raw_output)
+            result = LLMIntentOutput.model_validate(parsed)
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM output as JSON: {e}")
+            # Fallback to UNKNOWN intent
+            return LLMIntentOutput(
+                intent=IntentType.UNKNOWN,
+                confidence=0.0,
+                summary="Failed to parse user intent"
+            )
+        
+        except Exception as e:
+            logger.error(f"Error in LLM service: {e}")
+            return LLMIntentOutput(
+                intent=IntentType.UNKNOWN,
+                confidence=0.0,
+                summary=f"Error: {str(e)}"
+            )
+    
+    def _build_system_prompt(self) -> str:
+        """Build the system prompt for intent extraction."""
+        return """You are an AI assistant for a pharmacy order system.
+
+Your task is to analyze customer messages and extract:
+1. Intent (what the customer wants to do)
+2. Medications mentioned (name, quantity, dosage if specified)
+3. Whether prescription is likely required
+
+**Intent Types:**
+- ORDER_NEW: Customer wants to order new medication
+- ORDER_REFILL: Customer wants to refill existing prescription
+- INFO_REQUEST: Customer asking about medication info, side effects, etc.
+- UNKNOWN: Cannot determine intent
+
+**Output Format (JSON only):**
+{
+    "intent": "ORDER_NEW" | "ORDER_REFILL" | "INFO_REQUEST" | "UNKNOWN",
+    "confidence": 0.0-1.0,
+    "medications": [
+        {
+            "name": "medication name",
+            "quantity": integer or null,
+            "dosage": "dosage string or null"
+        }
+    ],
+    "requires_prescription": true | false,
+    "summary": "brief summary of the request"
+}
+
+**Examples:**
+
+User: "I need to refill my blood pressure medication"
+Output: {"intent": "ORDER_REFILL", "confidence": 0.9, "medications": [{"name": "blood pressure medication", "quantity": null, "dosage": null}], "requires_prescription": true, "summary": "Requesting refill for blood pressure medication"}
+
+User: "Can I get 30 tablets of ibuprofen 200mg?"
+Output: {"intent": "ORDER_NEW", "confidence": 0.95, "medications": [{"name": "ibuprofen", "quantity": 30, "dosage": "200mg"}], "requires_prescription": false, "summary": "Order request for ibuprofen 200mg, 30 tablets"}
+
+User: "What are the side effects of metformin?"
+Output: {"intent": "INFO_REQUEST", "confidence": 1.0, "medications": [{"name": "metformin", "quantity": null, "dosage": null}], "requires_prescription": false, "summary": "Information request about metformin side effects"}
+
+Respond with ONLY valid JSON. No additional text."""
+
+    def _build_user_prompt(self, message: str, context: Optional[dict]) -> str:
+        """Build the user prompt with context."""
+        prompt = f"Customer message: {message}\n\n"
+        
+        if context:
+            if context.get("prescriptions"):
+                prompt += f"Customer's active prescriptions: {context['prescriptions']}\n"
+            if context.get("recent_orders"):
+                prompt += f"Recent orders: {context['recent_orders']}\n"
+        
+        prompt += "\nAnalyze the message and respond with JSON only."
+        return prompt
