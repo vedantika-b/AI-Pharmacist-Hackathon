@@ -1,3 +1,15 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+from dotenv import load_dotenv
+import os
+from groq import Groq
+
+load_dotenv()
+
+app = FastAPI()
+
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
 """
 FastAPI Application for AI Pharmacist System.
 
