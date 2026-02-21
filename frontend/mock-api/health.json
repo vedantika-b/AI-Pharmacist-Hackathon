@@ -1,0 +1,8 @@
+{
+  "status": "healthy",
+  "app": "AI Pharmacist (frontend mock)",
+  "version": "1.0.0",
+  "timestamp": "2026-02-21T00:00:00.000Z",
+  "groq_configured": false,
+  "supabase_configured": false
+}

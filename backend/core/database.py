@@ -41,6 +41,11 @@ class DatabasePool:
     async def get_pool(cls) -> asyncpg.Pool:
         """Get or create database connection pool."""
         if cls._pool is None:
+            if not settings.database_url:
+                raise ValueError(
+                    "DATABASE_URL not configured. "
+                    "Add it to .env if you need direct PostgreSQL access."
+                )
             cls._pool = await asyncpg.create_pool(
                 settings.database_url,
                 min_size=5,

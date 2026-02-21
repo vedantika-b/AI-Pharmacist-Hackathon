@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Pharmacist — Frontend Demo</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app" class="container">
+    <header>
+      <h1>AI Pharmacist — Frontend Demo</h1>
+      <p class="muted">Standalone frontend with demo data (no backend required)</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Status</h2>
+        <div id="status" class="status">Offline (demo mode)</div>
+        <div class="controls">
+          <button id="btnHealth">Check Mock Health</button>
+          <button id="btnProducts">Load Demo Products</button>
+          <button id="btnCreateOrder">Create Demo Order</button>
+          <button id="btnClear">Clear Output</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Output</h2>
+        <pre id="output" class="output">No activity yet.</pre>
+      </section>
+
+      <section class="card">
+        <h2>Demo Data (local)</h2>
+        <div id="productsList" class="grid"></div>
+      </section>
+    </main>
+
+    <footer>
+      <small>Open the browser console to see detailed logs. This demo runs entirely in the frontend and uses static mock JSON files.</small>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
