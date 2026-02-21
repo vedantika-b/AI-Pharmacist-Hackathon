@@ -1,39 +1,11 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Activity, Users, Pill, TrendingUp } from "lucide-react"
-
-const stats = [
-  {
-    title: "Active Orders",
-    value: "24",
-    description: "+12% from last month",
-    icon: Activity,
-    color: "from-blue-500 to-cyan-500"
-  },
-  {
-    title: "Total Patients",
-    value: "1,234",
-    description: "+18% from last month",
-    icon: Users,
-    color: "from-purple-500 to-pink-500"
-  },
-  {
-    title: "Medicines Stock",
-    value: "892",
-    description: "23 low stock items",
-    icon: Pill,
-    color: "from-orange-500 to-red-500"
-  },
-  {
-    title: "Revenue",
-    value: "$12.4k",
-    description: "+20% from last month",
-    icon: TrendingUp,
-    color: "from-green-500 to-emerald-500"
-  }
-]
+import { Activity, Users, Pill, TrendingUp, Loader2, AlertTriangle, TrendingDown } from "lucide-react"
+import { getDashboardStats, getRecentOrders, getDashboardInsights } from "@/lib/api"
+import { formatCurrency } from "@/lib/utils"
 
 const container = {
   hidden: { opacity: 0 },
@@ -51,6 +23,84 @@ const item = {
 }
 
 export default function DashboardPage() {
+  const [stats, setStats] = useState<any>(null)
+  const [recentOrders, setRecentOrders] = useState<any[]>([])
+  const [insights, setInsights] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+      const [statsData, ordersData, insightsData] = await Promise.all([
+        getDashboardStats(),
+        getRecentOrders(4),
+        getDashboardInsights()
+      ])
+      setStats(statsData as any)
+      setRecentOrders(ordersData as any[])
+      setInsights(insightsData as any[])
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const statsConfig = stats ? [
+    {
+      title: "Active Orders",
+      value: stats.active_orders?.value || 0,
+      description: `${stats.active_orders?.change || ''} ${stats.active_orders?.description || ''}`,
+      icon: Activity,
+      color: "from-blue-500 to-cyan-500"
+    },
+    {
+      title: "Total Customers",
+      value: stats.total_customers?.value || 0,
+      description: `${stats.total_customers?.change || ''} ${stats.total_customers?.description || ''}`,
+      icon: Users,
+      color: "from-purple-500 to-pink-500"
+    },
+    {
+      title: "Medicines Stock",
+      value: stats.medicines_stock?.value || 0,
+      description: stats.medicines_stock?.description || 'No stock info',
+      icon: Pill,
+      color: "from-orange-500 to-red-500"
+    },
+    {
+      title: "Revenue",
+      value: formatCurrency(stats.revenue?.value || 0),
+      description: `${stats.revenue?.change || ''} ${stats.revenue?.description || ''}`,
+      icon: TrendingUp,
+      color: "from-green-500 to-emerald-500"
+    }
+  ] : []
+
+  const getInsightColor = (color: string) => {
+    const colorMap: Record<string, string> = {
+      blue: "bg-blue-50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-100",
+      green: "bg-green-50 dark:bg-green-950/30 text-green-900 dark:text-green-100",
+      purple: "bg-purple-50 dark:bg-purple-950/30 text-purple-900 dark:text-purple-100",
+      red: "bg-red-50 dark:bg-red-950/30 text-red-900 dark:text-red-100",
+      yellow: "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-900 dark:text-yellow-100"
+    }
+    return colorMap[color] || colorMap.blue
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2 text-muted-foreground">Loading dashboard...</span>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -67,7 +117,7 @@ export default function DashboardPage() {
         animate="show"
         className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
       >
-        {stats.map((stat, index) => (
+        {statsConfig.map((stat, index) => (
           <motion.div key={index} variants={item}>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -97,20 +147,30 @@ export default function DashboardPage() {
             <CardDescription>Latest medication orders and prescriptions</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-center justify-between border-b last:border-0 pb-4 last:pb-0">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Order #{1000 + i}</p>
-                    <p className="text-xs text-muted-foreground">Patient Name {i}</p>
+            {recentOrders.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No recent orders
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {recentOrders.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between border-b last:border-0 pb-4 last:pb-0">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Order #{order.id}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {order.item_count} item{order.item_count !== 1 ? 's' : ''} • {order.status}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{formatCurrency(order.total_amount)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium">${(Math.random() * 100 + 50).toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">{i} hours ago</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -120,32 +180,27 @@ export default function DashboardPage() {
             <CardDescription>Smart recommendations for your pharmacy</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                  Stock Alert
-                </p>
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                  5 medicines running low. Consider restocking soon.
-                </p>
+            {insights.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No insights available
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {insights.map((insight, index) => (
+                  <div 
+                    key={index} 
+                    className={`p-4 rounded-lg ${getInsightColor(insight.color)}`}
+                  >
+                    <p className="text-sm font-medium">
+                      {insight.category}
+                    </p>
+                    <p className="text-xs mt-1 opacity-90">
+                      {insight.message}
+                    </p>
+                  </div>
+                ))}
               </div>
-              <div className="p-4 bg-green-50 dark:bg-green-950/30 rounded-lg">
-                <p className="text-sm font-medium text-green-900 dark:text-green-100">
-                  Trending
-                </p>
-                <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-                  Demand for cold medicine increased by 30% this week.
-                </p>
-              </div>
-              <div className="p-4 bg-purple-50 dark:bg-purple-950/30 rounded-lg">
-                <p className="text-sm font-medium text-purple-900 dark:text-purple-100">
-                  AI Suggestion
-                </p>
-                <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
-                  Schedule refill reminders for 12 patients today.
-                </p>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

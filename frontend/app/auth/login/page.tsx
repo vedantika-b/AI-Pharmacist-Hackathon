@@ -5,25 +5,42 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Pill, Eye, EyeOff } from "lucide-react"
+import { Pill, Eye, EyeOff, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { signIn } from "@/lib/supabase"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setError(null)
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
+    const formData = new FormData(e.currentTarget)
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+    
+    try {
+      const { error: signInError } = await signIn(email, password)
+      
+      if (signInError) {
+        setError(signInError.message)
+        setIsLoading(false)
+        return
+      }
+      
+      // Successfully signed in
       router.push("/dashboard")
-    }, 1500)
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred')
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -52,13 +69,21 @@ export default function LoginPage() {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {error && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-900 dark:text-red-300 border border-red-200 dark:border-red-900">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <p className="text-sm">{error}</p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   placeholder="you@example.com"
                   required
+                  autoComplete="email"
                 />
               </div>
               <div className="space-y-2">
@@ -66,9 +91,11 @@ export default function LoginPage() {
                 <div className="relative">
                   <Input
                     id="password"
+                    name="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     required
+                    autoComplete="current-password"
                   />
                   <Button
                     type="button"

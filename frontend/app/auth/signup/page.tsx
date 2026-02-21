@@ -5,26 +5,71 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Pill, Eye, EyeOff } from "lucide-react"
+import { Pill, Eye, EyeOff, AlertCircle, CheckCircle } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { signUp } from "@/lib/supabase"
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setError(null)
+    setSuccess(false)
     
-    // Simulate API call
-    setTimeout(() => {
+    const formData = new FormData(e.currentTarget)
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+    const confirmPassword = formData.get('confirmPassword') as string
+    const fullName = formData.get('fullName') as string
+    
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      setError("Passwords do not match")
       setIsLoading(false)
-      router.push("/dashboard")
-    }, 1500)
+      return
+    }
+    
+    // Validate password length
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters")
+      setIsLoading(false)
+      return
+    }
+    
+    try {
+      const { error: signUpError } = await signUp(email, password, {
+        data: {
+          full_name: fullName
+        }
+      })
+      
+      if (signUpError) {
+        setError(signUpError.message)
+        setIsLoading(false)
+        return
+      }
+      
+      // Successfully signed up - show success message
+      setSuccess(true)
+      setIsLoading(false)
+      
+      // Redirect after 2 seconds
+      setTimeout(() => {
+        router.push("/dashboard")
+      }, 2000)
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred')
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -53,22 +98,38 @@ export default function SignupPage() {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {error && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-900 dark:text-red-300 border border-red-200 dark:border-red-900">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <p className="text-sm">{error}</p>
+                </div>
+              )}
+              {success && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-900 dark:text-green-300 border border-green-200 dark:border-green-900">
+                  <CheckCircle className="h-4 w-4 shrink-0" />
+                  <p className="text-sm">Account created successfully! Redirecting...</p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="fullName">Full Name</Label>
                 <Input
                   id="fullName"
+                  name="fullName"
                   type="text"
                   placeholder="John Doe"
                   required
+                  autoComplete="name"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   placeholder="you@example.com"
                   required
+                  autoComplete="email"
                 />
               </div>
               <div className="space-y-2">
@@ -76,9 +137,12 @@ export default function SignupPage() {
                 <div className="relative">
                   <Input
                     id="password"
+                    name="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     required
+                    minLength={6}
+                    autoComplete="new-password"
                   />
                   <Button
                     type="button"
@@ -100,9 +164,12 @@ export default function SignupPage() {
                 <div className="relative">
                   <Input
                     id="confirmPassword"
+                    name="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
                     placeholder="••••••••"
                     required
+                    minLength={6}
+                    autoComplete="new-password"
                   />
                   <Button
                     type="button"

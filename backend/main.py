@@ -34,7 +34,7 @@ from core.config import get_settings
 from core.database import DatabasePool
 
 # Import routers
-from routers import orders, health
+from routers import orders, health, products, chat, predictions, export, dashboard, ai_logs, users
 
 # Import middleware and exceptions
 from core.middleware import (
@@ -216,6 +216,34 @@ async def app_exception_handler(request: Request, exc: AppException):
 app.include_router(health.router)
 app.include_router(
     orders.router,
+    prefix=settings.api_v1_prefix
+)
+app.include_router(
+    products.router,
+    prefix=settings.api_v1_prefix
+)
+app.include_router(
+    chat.router,
+    prefix=settings.api_v1_prefix
+)
+app.include_router(
+    predictions.router,
+    prefix=settings.api_v1_prefix
+)
+app.include_router(
+    export.router,
+    prefix=settings.api_v1_prefix
+)
+app.include_router(
+    dashboard.router,
+    prefix=settings.api_v1_prefix
+)
+app.include_router(
+    ai_logs.router,
+    prefix=settings.api_v1_prefix
+)
+app.include_router(
+    users.router,
     prefix=settings.api_v1_prefix
 )
 

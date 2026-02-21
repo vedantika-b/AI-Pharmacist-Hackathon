@@ -7,38 +7,44 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Send, Mic, Bot, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { sendChatMessage } from "@/lib/api"
+import { getCurrentUser } from "@/lib/supabase"
 
 interface Message {
   id: string
   type: "user" | "ai"
   content: string
   timestamp: Date
+  intent?: string
+  confidence?: number
+  suggestions?: string[]
 }
 
 const initialMessages: Message[] = [
   {
     id: "1",
     type: "ai",
-    content: "Hello! I'm your AI Pharmacist assistant. How can I help you today? You can ask me about medications, dosages, drug interactions, or any health-related questions.",
+    content: "Hello! I'm your AI Pharmacist assistant. How can I help you today? You can ask me about medications, dosages, drug interactions, or order refills.",
     timestamp: new Date()
   }
-]
-
-const mockAIResponses = [
-  "Based on your query, I recommend consulting with a healthcare professional for personalized advice. However, I can provide general information about this medication.",
-  "That's a great question! Let me help you understand this better. The typical dosage for this medication is...",
-  "I understand your concern. Drug interactions can be serious, so it's important to check with your pharmacist or doctor.",
-  "This medication is commonly used to treat that condition. Let me share some important information you should know.",
-  "For best results, this medication should be taken as prescribed. Here are some helpful tips..."
 ]
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState("")
   const [isTyping, setIsTyping] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Get current user on mount
+  useEffect(() => {
+    getCurrentUser().then(({ user }) => {
+      if (user) setUserId(user.id)
+    })
+  }, [])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -57,20 +63,40 @@ export default function ChatPage() {
     }
 
     setMessages(prev => [...prev, userMessage])
+    const userInput = input
     setInput("")
     setIsTyping(true)
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      // Call real API
+      const response = await sendChatMessage(userInput, userId || undefined)
+      
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "ai",
-        content: mockAIResponses[Math.floor(Math.random() * mockAIResponses.length)],
-        timestamp: new Date()
+        content: response.response,
+        timestamp: new Date(),
+        intent: response.intent,
+        confidence: response.confidence,
+        suggestions: response.suggestions
       }
       setMessages(prev => [...prev, aiMessage])
+    } catch (error) {
+      console.error('Chat error:', error)
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "ai",
+        content: "I apologize, but I'm having trouble processing your request right now. Please try again or contact support if the issue persists.",
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
       setIsTyping(false)
-    }, 1500)
+    }
+  }
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setInput(suggestion)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -125,6 +151,41 @@ export default function ChatPage() {
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">
                       {message.content}
                     </p>
+                    
+                    {/* Show intent and confidence for AI messages */}
+                    {message.type === "ai" && message.intent && (
+                      <div className="flex gap-2 mt-3 flex-wrap">
+                        <Badge variant="secondary" className="text-xs">
+                          {message.intent.replace('_', ' ')}
+                        </Badge>
+                        {message.confidence && (
+                          <Badge variant="outline" className="text-xs">
+                            {Math.round(message.confidence * 100)}% confidence
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Show suggestions */}
+                    {message.type === "ai" && message.suggestions && message.suggestions.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs text-muted-foreground">Quick actions:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {message.suggestions.map((suggestion, idx) => (
+                            <Button
+                              key={idx}
+                              variant="outline"
+                              size="sm"
+                              className="text-xs h-7"
+                              onClick={() => handleSuggestionClick(suggestion)}
+                            >
+                              {suggestion}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     <p className={cn(
                       "text-xs mt-2",
                       message.type === "user" 

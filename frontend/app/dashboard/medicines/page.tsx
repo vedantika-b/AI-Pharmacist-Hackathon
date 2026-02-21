@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,103 +14,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Search, Filter, ShoppingCart, Pill, Info } from "lucide-react"
-
-interface Medicine {
-  id: string
-  name: string
-  genericName: string
-  category: string
-  price: number
-  inStock: boolean
-  description: string
-  dosage: string
-}
-
-const mockMedicines: Medicine[] = [
-  {
-    id: "1",
-    name: "Amoxicillin",
-    genericName: "Amoxicillin Trihydrate",
-    category: "Antibiotic",
-    price: 12.99,
-    inStock: true,
-    description: "Used to treat bacterial infections",
-    dosage: "500mg"
-  },
-  {
-    id: "2",
-    name: "Lipitor",
-    genericName: "Atorvastatin",
-    category: "Statin",
-    price: 24.99,
-    inStock: true,
-    description: "Used to lower cholesterol",
-    dosage: "20mg"
-  },
-  {
-    id: "3",
-    name: "Metformin",
-    genericName: "Metformin HCl",
-    category: "Diabetes",
-    price: 8.99,
-    inStock: true,
-    description: "Used to treat type 2 diabetes",
-    dosage: "850mg"
-  },
-  {
-    id: "4",
-    name: "Omeprazole",
-    genericName: "Omeprazole",
-    category: "Proton Pump Inhibitor",
-    price: 15.99,
-    inStock: false,
-    description: "Used to treat acid reflux",
-    dosage: "20mg"
-  },
-  {
-    id: "5",
-    name: "Aspirin",
-    genericName: "Acetylsalicylic Acid",
-    category: "Pain Reliever",
-    price: 5.99,
-    inStock: true,
-    description: "Pain relief and blood thinner",
-    dosage: "81mg"
-  },
-  {
-    id: "6",
-    name: "Lisinopril",
-    genericName: "Lisinopril",
-    category: "ACE Inhibitor",
-    price: 9.99,
-    inStock: true,
-    description: "Used to treat high blood pressure",
-    dosage: "10mg"
-  },
-  {
-    id: "7",
-    name: "Levothyroxine",
-    genericName: "Levothyroxine Sodium",
-    category: "Thyroid",
-    price: 11.99,
-    inStock: true,
-    description: "Used to treat thyroid deficiency",
-    dosage: "50mcg"
-  },
-  {
-    id: "8",
-    name: "Amlodipine",
-    genericName: "Amlodipine Besylate",
-    category: "Calcium Channel Blocker",
-    price: 13.99,
-    inStock: true,
-    description: "Used to treat high blood pressure",
-    dosage: "5mg"
-  }
-]
-
-const categories = ["All", "Antibiotic", "Statin", "Diabetes", "Pain Reliever", "ACE Inhibitor", "Thyroid"]
+import { Search, Filter, ShoppingCart, Pill, Info, Loader2 } from "lucide-react"
+import { getProducts } from "@/lib/api"
+import { debounce } from "@/lib/utils"
+import type { Medicine } from "@/lib/types"
 
 const container = {
   hidden: { opacity: 0 },
@@ -128,18 +35,53 @@ const item = {
 }
 
 export default function MedicinesPage() {
+  const [medicines, setMedicines] = useState<Medicine[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [cart, setCart] = useState<string[]>([])
+  const [categories, setCategories] = useState<string[]>(["All"])
 
-  const filteredMedicines = mockMedicines.filter((medicine) => {
-    const matchesSearch =
-      medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      medicine.genericName.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory =
-      selectedCategory === "All" || medicine.category === selectedCategory
-    return matchesSearch && matchesCategory
-  })
+  // Fetch medicines
+  useEffect(() => {
+    fetchMedicines()
+  }, [])
+
+  const fetchMedicines = async (search?: string, category?: string) => {
+    try {
+      setLoading(true)
+      const params: any = {}
+      if (search) params.search = search
+      if (category && category !== "All") params.category = category
+      
+      const data = await getProducts(params) as any
+      setMedicines(data)
+      
+      // Extract unique categories
+      const uniqueCategories = ["All", ...new Set(data.map((m: Medicine) => m.category).filter(Boolean))]
+      setCategories(uniqueCategories as string[])
+    } catch (error) {
+      console.error('Failed to fetch medicines:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Debounced search
+  const handleSearch = debounce((query: string) => {
+    fetchMedicines(query, selectedCategory !== "All" ? selectedCategory : undefined)
+  }, 500)
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setSearchQuery(value)
+    handleSearch(value)
+  }
+
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category)
+    fetchMedicines(searchQuery || undefined, category !== "All" ? category : undefined)
+  }
 
   const addToCart = (medicineId: string) => {
     setCart(prev => [...prev, medicineId])
@@ -147,6 +89,13 @@ export default function MedicinesPage() {
     setTimeout(() => {
       setCart(prev => prev.filter(id => id !== medicineId))
     }, 2000)
+  }
+
+  const formatCurrency = (price: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(price)
   }
 
   return (
@@ -167,7 +116,7 @@ export default function MedicinesPage() {
               <Input
                 placeholder="Search by medicine name or generic name..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={handleSearchChange}
                 className="pl-10 h-12"
               />
             </div>
@@ -185,7 +134,7 @@ export default function MedicinesPage() {
                 {categories.map((category) => (
                   <DropdownMenuItem
                     key={category}
-                    onClick={() => setSelectedCategory(category)}
+                    onClick={() => handleCategoryChange(category)}
                   >
                     {category}
                   </DropdownMenuItem>
@@ -201,89 +150,114 @@ export default function MedicinesPage() {
         </CardContent>
       </Card>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-muted-foreg round">Loading medicines...</span>
+        </div>
+      )}
+
       {/* Results Count */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Found {filteredMedicines.length} medicine{filteredMedicines.length !== 1 ? "s" : ""}
-        </p>
-      </div>
+      {!loading && medicines.length > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Found {medicines.length} medicine{medicines.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+      )}
 
       {/* Medicine Grid */}
-      <motion.div
-        variants={container}
-        initial="hidden"
-        animate="show"
-        className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-      >
-        {filteredMedicines.map((medicine) => (
-          <motion.div key={medicine.id} variants={item}>
-            <Card className="h-full flex flex-col hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between mb-2">
-                  <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                    <Pill className="h-6 w-6 text-white" />
+      {!loading && medicines.length > 0 && (
+        <motion.div
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+        >
+          {medicines.map((medicine) => (
+            <motion.div key={medicine.id} variants={item}>
+              <Card className="h-full flex flex-col hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                      <Pill className="h-6 w-6 text-white" />
+                    </div>
+                    <Badge variant={medicine.stock_quantity > 0 ? "default" : "destructive"}>
+                      {medicine.stock_quantity > 0 ? "In Stock" : "Out of Stock"}
+                    </Badge>
                   </div>
-                  <Badge variant={medicine.inStock ? "default" : "destructive"}>
-                    {medicine.inStock ? "In Stock" : "Out of Stock"}
-                  </Badge>
-                </div>
-                <CardTitle className="text-lg">{medicine.name}</CardTitle>
-                <CardDescription className="text-xs">
-                  {medicine.genericName}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col justify-between">
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Category:</span>
-                    <Badge variant="outline">{medicine.category}</Badge>
+                  <CardTitle className="text-lg">{medicine.name}</CardTitle>
+                  <CardDescription className="text-xs">
+                    {medicine.generic_name || medicine.brand_name}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col justify-between">
+                  <div className="space-y-2 mb-4">
+                    {medicine.category && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Category:</span>
+                        <Badge variant="outline">{medicine.category}</Badge>
+                      </div>
+                    )}
+                    {medicine.strength && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Strength:</span>
+                        <span className="font-medium">{medicine.strength}</span>
+                      </div>
+                    )}
+                    {medicine.prescription_required && (
+                      <Badge variant="secondary" className="text-xs">
+                        Prescription Required
+                      </Badge>
+                    )}
+                    {medicine.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {medicine.description}
+                      </p>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Dosage:</span>
-                    <span className="font-medium">{medicine.dosage}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {medicine.description}
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold text-primary">
-                      ${medicine.price}
-                    </span>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl font-bold text-primary">
+                        {formatCurrency(medicine.price)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="More information"
+                      >
+                        <Info className="h-4 w-4" />
+                      </Button>
+                    </div>
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      title="More information"
+                      onClick={() => addToCart(medicine.id)}
+                      disabled={medicine.stock_quantity <= 0 || cart.includes(medicine.id)}
+                      className="w-full"
                     >
-                      <Info className="h-4 w-4" />
+                      {cart.includes(medicine.id) ? (
+                        "Added to Cart ✓"
+                      ) : (
+                        <>
+                          <ShoppingCart className="mr-2 h-4 w-4" />
+                          Add to Cart
+                        </>
+                      )}
                     </Button>
                   </div>
-                  <Button
-                    onClick={() => addToCart(medicine.id)}
-                    disabled={!medicine.inStock || cart.includes(medicine.id)}
-                    className="w-full"
-                  >
-                    {cart.includes(medicine.id) ? (
-                      "Added to Cart ✓"
-                    ) : (
-                      <>
-                        <ShoppingCart className="mr-2 h-4 w-4" />
-                        Add to Cart
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </motion.div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
 
-      {filteredMedicines.length === 0 && (
+      {/* Empty State */}
+      {!loading && medicines.length === 0 && (
         <Card className="p-12">
           <div className="text-center space-y-2">
+            <Pill className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-2xl font-semibold">No medicines found</p>
             <p className="text-muted-foreground">
               Try adjusting your search or filter criteria
