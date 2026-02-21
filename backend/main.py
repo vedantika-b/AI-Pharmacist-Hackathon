@@ -34,18 +34,51 @@ from core.config import get_settings
 from core.database import DatabasePool
 
 # Import routers
-from routers import orders
+from routers import orders, health
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('../logs/app.log')
-    ]
+# Import middleware and exceptions
+from core.middleware import (
+    RequestIDMiddleware,
+    StructuredLoggingMiddleware,
+    ErrorHandlerMiddleware,
+    ResponseTimeMiddleware
 )
+from core.exceptions import AppException
 
+# Configure structured logging
+def setup_logging():
+    log_level = getattr(logging, get_settings().log_level.upper(), logging.INFO)
+    
+    handlers = [logging.StreamHandler(sys.stdout)]
+    
+    # JSON formatting for production
+    if get_settings().log_format == "json":
+        try:
+            import json_log_formatter
+            formatter = json_log_formatter.JSONFormatter()
+        except ImportError:
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            )
+    else:
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+    
+    for handler in handlers:
+        handler.setFormatter(formatter)
+    
+    logging.basicConfig(
+        level=log_level,
+        handlers=handlers
+    )
+    
+    # Suppress noisy loggers
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+setup_logging()
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
@@ -53,151 +86,151 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Lifespan context manager for startup and shutdown events.
+    Production-ready lifespan with proper resource management.
     """
     # Startup
-    logger.info("=" * 60)
-    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    logger.info(f"Environment: {'DEBUG' if settings.debug else 'PRODUCTION'}")
-    logger.info("=" * 60)
+    startup_data = {
+        "app": settings.app_name,
+        "version": settings.app_version,
+        "environment": settings.environment,
+        "debug": settings.debug
+    }
+    logger.info(f"Starting {settings.app_name}", extra={"structured": startup_data})
     
-    # Initialize database pool
-    try:
-        pool = await DatabasePool.get_pool()
-        logger.info("✓ Database connection pool initialized")
-    except Exception as e:
-        logger.error(f"✗ Failed to initialize database pool: {e}")
+    # Initialize database pool (optional for direct access)
+    if settings.database_url:
+        try:
+            pool = await DatabasePool.get_pool()
+            logger.info("Database pool initialized", extra={"structured": {"pool_size": settings.db_pool_size}})
+        except Exception as e:
+            logger.error(f"Database pool initialization failed: {e}", exc_info=True)
+            if settings.is_production:
+                raise
     
-    # Verify Groq API key
-    if settings.groq_api_key:
-        logger.info("✓ Groq API key configured")
-    else:
-        logger.warning("✗ Groq API key not found!")
+    # Verify external service configurations
+    services_status = {
+        "groq": bool(settings.groq_api_key),
+        "supabase": bool(settings.supabase_url and settings.supabase_service_key)
+    }
+    logger.info("External services configured", extra={"structured": services_status})
+    
+    # Initialize Sentry for error tracking (production)
+    if settings.sentry_dsn:
+        try:
+            import sentry_sdk
+            sentry_sdk.init(
+                dsn=settings.sentry_dsn,
+                environment=settings.environment,
+                traces_sample_rate=0.1 if settings.is_production else 1.0
+            )
+            logger.info("Sentry initialized")
+        except ImportError:
+            logger.warning("Sentry SDK not installed")
     
     logger.info("Application startup complete")
     
     yield
     
     # Shutdown
-    logger.info("Shutting down application...")
+    logger.info("Shutting down application")
     
-    try:
-        await DatabasePool.close_pool()
-        logger.info("✓ Database connections closed")
-    except Exception as e:
-        logger.error(f"Error closing database pool: {e}")
+    if settings.database_url:
+        try:
+            await DatabasePool.close_pool()
+            logger.info("Database connections closed")
+        except Exception as e:
+            logger.error(f"Error closing database pool: {e}", exc_info=True)
     
-    logger.info("Application shutdown complete")
+    logger.info("Shutdown complete")
 
 
-# Create FastAPI application
+# Create FastAPI application with production config
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="""
-    AI-powered pharmacist system with multi-agent architecture.
+    Production-ready AI-powered pharmacist system.
     
-    ## Features
+    ## Architecture
     
-    * **LLM Intent Extraction**: Groq llama-3.1-8b-instant for understanding customer requests
-    * **Safety Validation**: Rule-based prescription and dosage checking
-    * **Refill Prediction**: ML-powered prediction of refill dates
-    * **Inventory Management**: Real-time stock tracking and updates
-    * **Audit Logging**: Complete tracking of all AI decisions
+    Multi-agent system with:
+    * LLM-powered intent extraction (Groq)
+    * Rule-based safety validation
+    * ML refill prediction
+    * Real-time inventory management
+    * Complete audit trail
     
-    ## Agents
+    ## Security
     
-    1. **Conversation Agent**: Extracts intent and entities from orders
-    2. **Safety Agent**: Validates prescriptions and checks drug interactions
-    3. **Refill Prediction Agent**: Predicts when customers need refills
-    4. **Action Agent**: Executes orders and updates inventory
+    * Rate limiting
+    * Request tracking
+    * Structured logging
+    * Input validation
+    
+    ## Monitoring
+    
+    * Health checks
+    * Performance metrics
+    * Error tracking (Sentry)
     """,
     lifespan=lifespan,
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None
+    docs_url="/docs" if not settings.is_production else None,
+    redoc_url="/redoc" if not settings.is_production else None,
+    openapi_url="/openapi.json" if not settings.is_production else None
 )
+
+# Add production middleware stack (order matters)
+app.add_middleware(ErrorHandlerMiddleware)
+app.add_middleware(ResponseTimeMiddleware)
+app.add_middleware(StructuredLoggingMiddleware)
+app.add_middleware(RequestIDMiddleware)
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-Process-Time"],
 )
 
-
-# Request logging middleware
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Log all incoming requests."""
-    start_time = datetime.utcnow()
-    
-    # Log request
-    logger.info(f"→ {request.method} {request.url.path}")
-    
-    # Process request
-    response = await call_next(request)
-    
-    # Log response
-    duration = (datetime.utcnow() - start_time).total_seconds() * 1000
-    logger.info(
-        f"← {request.method} {request.url.path} "
-        f"[{response.status_code}] {duration:.2f}ms"
-    )
-    
-    return response
-
-
-# Global exception handler
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Handle uncaught exceptions."""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+# Custom exception handlers
+@app.exception_handler(AppException)
+async def app_exception_handler(request: Request, exc: AppException):
+    """Handle application-specific exceptions."""
+    request_id = getattr(request.state, "request_id", "unknown")
     
     return JSONResponse(
-        status_code=500,
+        status_code=exc.status_code,
         content={
-            "error": "Internal server error",
-            "detail": str(exc) if settings.debug else "An unexpected error occurred",
-            "path": str(request.url.path)
+            "error": exc.error_code,
+            "message": exc.message,
+            "request_id": request_id,
+            **exc.details
         }
     )
 
 
 # Include routers
+app.include_router(health.router)
 app.include_router(
     orders.router,
     prefix=settings.api_v1_prefix
 )
 
 
-# Health check endpoint
-@app.get("/health", tags=["Health"])
-async def health_check():
-    """
-    Health check endpoint.
-    Returns application status and configuration.
-    """
-    return {
-        "status": "healthy",
-        "app": settings.app_name,
-        "version": settings.app_version,
-        "timestamp": datetime.utcnow().isoformat(),
-        "groq_configured": bool(settings.groq_api_key),
-        "supabase_configured": bool(settings.supabase_url and settings.supabase_service_key)
-    }
-
-
 # Root endpoint
 @app.get("/", tags=["Root"])
 async def root():
-    """Root endpoint with API information."""
+    """API root with service information."""
     return {
-        "message": f"Welcome to {settings.app_name}",
+        "service": settings.app_name,
         "version": settings.app_version,
-        "docs": "/docs" if settings.debug else "Documentation disabled in production",
-        "health": "/health"
+        "environment": settings.environment,
+        "health": "/health",
+        "docs": "/docs" if not settings.is_production else None,
+        "api": settings.api_v1_prefix
     }
 
 

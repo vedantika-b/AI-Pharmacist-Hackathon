@@ -1,0 +1,21 @@
+{
+  "name": "ai-pharmacist-hackathon",
+  "version": "1.0.0",
+  "description": "Agentic AI system for autonomous digital pharmacy\r This project is an AI-driven pharmacist that supports natural voice/text ordering, enforces medicine and prescription safety, predicts individual refill needs, and autonomously drives backend operations with minimal human intervention.\r ## Core Features\r - **Conversational Ordering:** Supports natural text and voice conversations to extract medicine names, dosages, and quantities.\r - **Safety & Policy Enforcement:** Automatically checks prescriptions and stock levels before processing orders.\r - **Predictive Intelligence:** Proactively predicts when patients need refills using historical data.\r - **Real-world Action:** Triggers backend actions such as inventory updates, webhooks, and notifications.\r - **Observability & Trace Logs:** Tracks all agent decisions and interactions for audit purposes.\r ## Add-ons\r - **User Accounts:** Sign up / login system with password hashing.\r - **Multilingual Support:** Chat supports multiple languages using i18next.\r - **Voice Input & Output:** Conversational interface supports speech recognition and text-to-speech.\r - **Proactive Refill Alerts:** Users get notifications automatically before they run out of medicine.\r - **CSV Input:** Medicine and order history loaded from provided CSV files.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vedantika-b/AI-Pharmacist-Hackathon.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/vedantika-b/AI-Pharmacist-Hackathon/issues"
+  },
+  "homepage": "https://github.com/vedantika-b/AI-Pharmacist-Hackathon#readme"
+}
