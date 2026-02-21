@@ -1,6 +1,0 @@
-{
-  "order_id": "demo-order-1",
-  "status": "created",
-  "total": 4.5,
-  "message": "This is a frontend-only mock response. No backend involved."
-}
