@@ -30,7 +30,7 @@ def check_dependencies():
         return True
     except ImportError as e:
         print(f"❌ Missing dependencies: {e}")
-        print("   Install with: pip install -r requirements.txt\n")
+        print("  Install with: pip install -r requirements.txt\n")
         return False
 
 def check_ml_models():

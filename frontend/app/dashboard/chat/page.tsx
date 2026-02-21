@@ -8,10 +8,14 @@ import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Send, Mic, Bot, User } from "lucide-react"
+import { Send, Mic, Bot, User, Volume2, Square } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { sendChatMessage } from "@/lib/api"
 import { getCurrentUser } from "@/lib/supabase"
+import { useVoiceInput } from "@/hooks/useVoiceInput"
+import { useTextToSpeech } from "@/hooks/useTextToSpeech"
+import { useLanguage } from "@/contexts/LanguageContext"
+import { t } from "@/lib/translations"
 
 interface Message {
   id: string
@@ -33,11 +37,31 @@ const initialMessages: Message[] = [
 ]
 
 export default function ChatPage() {
+  const { language } = useLanguage()
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [input, setInput] = useState("")
   const [isTyping, setIsTyping] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Voice hooks
+  const { isListening, startListening, stopListening } = useVoiceInput({
+    language: language === "hi" ? "hi-IN" : language === "mr" ? "mr-IN" : "en-US",
+    onTranscript: (transcript) => {
+      setInput(transcript)
+    },
+    onError: (error) => {
+      console.error('Voice error:', error)
+    }
+  })
+
+  const { isSpeaking, speak, stop } = useTextToSpeech({
+    language: language === "hi" ? "hi-IN" : language === "mr" ? "mr-IN" : "en-US",
+    rate: 1,
+    pitch: 1,
+    volume: 1,
+  })
 
   // Get current user on mount
   useEffect(() => {
@@ -99,6 +123,16 @@ export default function ChatPage() {
     setInput(suggestion)
   }
 
+  const handleSpeakMessage = (messageId: string, content: string) => {
+    if (speakingMessageId === messageId) {
+      stop()
+      setSpeakingMessageId(null)
+    } else {
+      setSpeakingMessageId(messageId)
+      speak(content)
+    }
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -109,7 +143,7 @@ export default function ChatPage() {
   return (
     <div className="h-full flex flex-col">
       <div className="mb-6">
-        <h1 className="text-4xl font-bold mb-2">AI Pharmacist Chat</h1>
+        <h1 className="text-4xl font-bold mb-2">{t('chat', language)} - AI Pharmacist</h1>
         <p className="text-muted-foreground">
           Ask me anything about medications, dosages, interactions, and health advice
         </p>
@@ -151,6 +185,25 @@ export default function ChatPage() {
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">
                       {message.content}
                     </p>
+                    
+                    {/* Speak button for AI messages */}
+                    {message.type === "ai" && (
+                      <div className="flex gap-2 mt-3 items-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 w-7 p-0"
+                          onClick={() => handleSpeakMessage(message.id, message.content)}
+                          title={speakingMessageId === message.id ? t('speaking', language) : t('voiceOutput', language)}
+                        >
+                          {speakingMessageId === message.id ? (
+                            <Square className="h-4 w-4" fill="currentColor" />
+                          ) : (
+                            <Volume2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    )}
                     
                     {/* Show intent and confidence for AI messages */}
                     {message.type === "ai" && message.intent && (
@@ -250,19 +303,20 @@ export default function ChatPage() {
         <div className="border-t p-6 bg-background">
           <div className="max-w-4xl mx-auto flex gap-4">
             <Button
-              variant="outline"
+              variant={isListening ? "default" : "outline"}
               size="icon"
               className="shrink-0 h-12 w-12"
-              title="Voice input (UI only)"
+              onClick={isListening ? stopListening : startListening}
+              title={isListening ? t('listening', language) : t('voiceInput', language)}
             >
-              <Mic className="h-5 w-5" />
+              <Mic className={cn("h-5 w-5", isListening && "animate-pulse")} />
             </Button>
             <div className="flex-1 flex gap-2">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Type your message here..."
+                placeholder={t('chatPlaceholder', language)}
                 className="flex-1 h-12"
               />
               <Button

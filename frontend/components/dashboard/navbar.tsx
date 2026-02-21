@@ -14,6 +14,7 @@ import { Moon, Sun, User, Settings, LogOut, Search } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
+import { LanguageSelector } from "@/components/LanguageSelector"
 
 export default function Navbar() {
   const { theme, setTheme } = useTheme()
@@ -34,6 +35,9 @@ export default function Navbar() {
 
       {/* Actions */}
       <div className="flex items-center gap-4">
+        {/* Language Selector */}
+        <LanguageSelector />
+
         {/* Theme Toggle */}
         <Button
           variant="ghost"
