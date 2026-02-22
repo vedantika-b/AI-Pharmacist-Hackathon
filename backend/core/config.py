@@ -1,10 +1,12 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator, model_validator
 from functools import lru_cache
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 import logging
+import json
 
 logger = logging.getLogger(__name__)
+DEFAULT_CORS_ORIGINS = ["http://localhost:3000", "http://localhost:5173"]
 
 
 class Settings(BaseSettings):
@@ -53,8 +55,8 @@ class Settings(BaseSettings):
     
     # API
     api_v1_prefix: str = Field(default="/api/v1", alias="API_V1_PREFIX")
-    cors_origins: list[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173"],
+    cors_origins: Union[str, list[str]] = Field(
+        default="http://localhost:3000,http://localhost:5173",
         alias="CORS_ORIGINS"
     )
     
@@ -69,7 +71,7 @@ class Settings(BaseSettings):
     
     # Security
     secret_key: Optional[str] = Field(default=None, alias="SECRET_KEY")
-    allowed_hosts: list[str] = Field(default=["*"], alias="ALLOWED_HOSTS")
+    allowed_hosts: Union[str, list[str]] = Field(default="*", alias="ALLOWED_HOSTS")
     
     # Monitoring
     sentry_dsn: Optional[str] = Field(default=None, alias="SENTRY_DSN")
@@ -84,17 +86,45 @@ class Settings(BaseSettings):
     
     @field_validator("cors_origins", mode="before")
     @classmethod
-    def parse_cors_origins(cls, v):
+    def parse_cors_origins(cls, v) -> list[str]:
+        """Parse CORS origins from string or list."""
+        if v is None or v == "":
+            return DEFAULT_CORS_ORIGINS
+        if isinstance(v, list):
+            return v
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+            # Try parsing as JSON array first
+            if v.strip().startswith("["):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
+            # Fall back to comma-separated
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return DEFAULT_CORS_ORIGINS
     
     @field_validator("allowed_hosts", mode="before")
     @classmethod
-    def parse_allowed_hosts(cls, v):
+    def parse_allowed_hosts(cls, v) -> list[str]:
+        """Parse allowed hosts from string or list."""
+        if v is None or v == "":
+            return ["*"]
+        if isinstance(v, list):
+            return v
         if isinstance(v, str):
-            return [host.strip() for host in v.split(",")]
-        return v
+            # Try parsing as JSON array first
+            if v.strip().startswith("["):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
+            # Fall back to comma-separated
+            return [host.strip() for host in v.split(",") if host.strip()]
+        return ["*"]
     
     @model_validator(mode="after")
     def validate_production_settings(self):

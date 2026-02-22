@@ -15,10 +15,31 @@ import { useTheme } from "next-themes"
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
 import { LanguageSelector } from "@/components/LanguageSelector"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function Navbar() {
   const { theme, setTheme } = useTheme()
   const router = useRouter()
+  const { user, signOut } = useAuth()
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      router.push('/auth/login')
+    } catch (error) {
+      console.error('Sign out error:', error)
+    }
+  }
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'U'
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
 
   return (
     <header className="h-16 border-b bg-card px-6 flex items-center justify-between">
@@ -53,9 +74,9 @@ export default function Navbar() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
               <Avatar>
-                <AvatarImage src="/avatar.png" alt="User" />
+                <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} alt={user?.name} />
                 <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
-                  JD
+                  {getInitials(user?.name)}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -63,10 +84,8 @@ export default function Navbar() {
           <DropdownMenuContent className="w-56" align="end" forceMount>
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">John Doe</p>
-                <p className="text-xs leading-none text-muted-foreground">
-                  john.doe@example.com
-                </p>
+                <p className="text-sm font-medium leading-none">{user?.name || 'User'}</p>
+                <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -79,9 +98,9 @@ export default function Navbar() {
               <span>Settings</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/")}>
+            <DropdownMenuItem onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />
-              <span>Log out</span>
+              <span>Sign Out</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

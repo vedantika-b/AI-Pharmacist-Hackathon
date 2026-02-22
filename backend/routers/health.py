@@ -4,7 +4,7 @@ Production health check and monitoring endpoints.
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from datetime import datetime
 import psutil
 import time
@@ -29,7 +29,7 @@ class HealthResponse(BaseModel):
 
 class DetailedHealthResponse(HealthResponse):
     dependencies: Dict[str, str]
-    system: Optional[Dict[str, any]] = None
+    system: Optional[Dict[str, Any]] = None
 
 
 @router.get("/health", response_model=HealthResponse, status_code=status.HTTP_200_OK)

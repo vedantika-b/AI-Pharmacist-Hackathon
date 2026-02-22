@@ -34,7 +34,7 @@ from core.config import get_settings
 from core.database import DatabasePool
 
 # Import routers
-from routers import orders, health, products, chat, predictions, export, dashboard, ai_logs, users
+from routers import orders, health, products, chat, predictions, export, dashboard, ai_logs, users, prescriptions
 
 # Import middleware and exceptions
 from core.middleware import (
@@ -98,21 +98,31 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name}", extra={"structured": startup_data})
     
     # Initialize database pool (optional for direct access)
-    if settings.database_url:
+    if settings.database_url and settings.database_url != "postgresql://postgres:password@db.your-project.supabase.co:5432/postgres":
         try:
             pool = await DatabasePool.get_pool()
             logger.info("Database pool initialized", extra={"structured": {"pool_size": settings.db_pool_size}})
         except Exception as e:
             logger.error(f"Database pool initialization failed: {e}", exc_info=True)
-            if settings.is_production:
-                raise
+            logger.warning("Continuing without database pool (using Supabase client only)")
+    else:
+        logger.info("Database pool skipped (using Supabase client only)")
     
     # Verify external service configurations
     services_status = {
-        "groq": bool(settings.groq_api_key),
-        "supabase": bool(settings.supabase_url and settings.supabase_service_key)
+        "groq": bool(settings.groq_api_key and settings.groq_api_key != "your-groq-api-key-here"),
+        "supabase": bool(
+            settings.supabase_url 
+            and settings.supabase_service_key 
+            and settings.supabase_service_key != "your-service-role-key-here"
+        )
     }
     logger.info("External services configured", extra={"structured": services_status})
+    
+    if not services_status["supabase"]:
+        logger.warning("Supabase service key not configured - database operations will fail")
+    if not services_status["groq"]:
+        logger.warning("Groq API key not configured - LLM operations will fail")
     
     # Initialize Sentry for error tracking (production)
     if settings.sentry_dsn:
@@ -246,8 +256,10 @@ app.include_router(
     users.router,
     prefix=settings.api_v1_prefix
 )
-
-
+app.include_router(
+    prescriptions.router,
+    prefix=settings.api_v1_prefix
+)
 # Root endpoint
 @app.get("/", tags=["Root"])
 async def root():

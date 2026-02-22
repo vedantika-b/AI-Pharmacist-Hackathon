@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Pill, Eye, EyeOff, AlertCircle, CheckCircle } from "lucide-react"
+import { Pill, Eye, EyeOff, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { signUp } from "@/lib/supabase"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -18,6 +18,14 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const router = useRouter()
+  const { signUp, user, loading } = useAuth()
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && user) {
+      router.push("/dashboard")
+    }
+  }, [user, loading, router])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -46,19 +54,7 @@ export default function SignupPage() {
     }
     
     try {
-      const { error: signUpError } = await signUp(email, password, {
-        data: {
-          full_name: fullName
-        }
-      })
-      
-      if (signUpError) {
-        setError(signUpError.message)
-        setIsLoading(false)
-        return
-      }
-      
-      // Successfully signed up - show success message
+      await signUp(email, password, fullName)
       setSuccess(true)
       setIsLoading(false)
       
@@ -67,7 +63,7 @@ export default function SignupPage() {
         router.push("/dashboard")
       }, 2000)
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred')
+      setError(err.message || 'Failed to create account. Please try again.')
       setIsLoading(false)
     }
   }

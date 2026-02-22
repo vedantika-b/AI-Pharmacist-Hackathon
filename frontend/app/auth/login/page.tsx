@@ -5,17 +5,25 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Pill, Eye, EyeOff, AlertCircle } from "lucide-react"
+import { Pill, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { signIn } from "@/lib/supabase"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const { signIn, user, loading } = useAuth()
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && user) {
+      router.push("/dashboard")
+    }
+  }, [user, loading, router])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -27,18 +35,10 @@ export default function LoginPage() {
     const password = formData.get('password') as string
     
     try {
-      const { error: signInError } = await signIn(email, password)
-      
-      if (signInError) {
-        setError(signInError.message)
-        setIsLoading(false)
-        return
-      }
-      
-      // Successfully signed in
+      await signIn(email, password)
       router.push("/dashboard")
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred')
+      setError(err.message || 'Failed to sign in. Please check your credentials.')
       setIsLoading(false)
     }
   }

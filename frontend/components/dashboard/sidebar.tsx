@@ -11,22 +11,27 @@ import {
   Bell, 
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileText
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-
-const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: MessageSquare, label: "AI Chat", href: "/dashboard/chat" },
-  { icon: Pill, label: "Medicines", href: "/dashboard/medicines" },
-  { icon: Bell, label: "Refill Alerts", href: "/dashboard/alerts" },
-  { icon: Settings, label: "Settings", href: "/dashboard/settings" },
-]
+import { useLanguage } from "@/contexts/LanguageContext"
+import { t } from "@/lib/translations"
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
+  const { language } = useLanguage()
+
+  const menuItems = [
+    { icon: LayoutDashboard, label: t('dashboard', language), href: "/dashboard" },
+    { icon: MessageSquare, label: t('chat', language), href: "/dashboard/chat" },
+    { icon: Pill, label: t('medicines', language), href: "/dashboard/medicines" },
+    { icon: FileText, label: "Prescription OCR", href: "/dashboard/ocr" },
+    { icon: Bell, label: t('alerts', language), href: "/dashboard/alerts" },
+    { icon: Settings, label: t('settings', language), href: "/dashboard/settings" },
+  ]
 
   return (
     <motion.aside

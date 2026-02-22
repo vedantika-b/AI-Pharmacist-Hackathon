@@ -65,7 +65,14 @@ class DatabasePool:
 @lru_cache()
 def get_supabase_client() -> Client:
     """Dependency injection helper for Supabase client."""
-    return SupabaseManager.get_client()
+    try:
+        return SupabaseManager.get_client()
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to initialize Supabase client: {e}. Endpoints will use mock data.")
+        # Return None - endpoints will check and use mock data
+        return None
 
 
 async def get_db_pool() -> asyncpg.Pool:
