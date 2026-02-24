@@ -1,0 +1,2 @@
+/* Import Next app global styles so the Vite harness can reuse them */
+@import "../app/globals.css";
