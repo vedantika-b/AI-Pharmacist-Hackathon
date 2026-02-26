@@ -135,13 +135,13 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
-.envrc
+# .env
+# .envrc
 .venv
-env/
+# env/
 venv/
-ENV/
-env.bak/
+# ENV/
+# env.bak/
 venv.bak/
 
 # Spyder project settings
@@ -215,9 +215,9 @@ frontend/tsconfig.tsbuildinfo
 # Backend
 backend/venv
 backend/__pycache__
-backend/.env
+# backend/.env
 
 # General
-.env
+# .env
 node_modules
 .next
