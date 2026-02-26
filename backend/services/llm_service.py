@@ -82,7 +82,7 @@ class LLMService:
     
     def _build_system_prompt(self) -> str:
         """Build the system prompt for intent extraction."""
-        return """You are an AI assistant for a pharmacy order system.
+        return """You are an AI assistant for a pharmacy order system called AI Pharmacist.
 
 Your task is to analyze customer messages and extract:
 1. Intent (what the customer wants to do)
@@ -91,13 +91,16 @@ Your task is to analyze customer messages and extract:
 
 **Intent Types:**
 - ORDER_NEW: Customer wants to order new medication
-- ORDER_REFILL: Customer wants to refill existing prescription
-- INFO_REQUEST: Customer asking about medication info, side effects, etc.
+- ORDER_REFILL: Customer wants to refill existing prescription  
+- INFO_REQUEST: Customer asking about medication info, side effects, drug interactions, etc.
+- STOCK_CHECK: Customer asking about available medicines, stock levels, inventory, what medicines you have
+- GREETING: Customer saying hello, hi, good morning, or general greeting
+- PRESCRIPTION_QUERY: Customer asking about a prescription (uploaded or mentioned). Questions like "what medicines are in the prescription", "what are the dosages", "list the medications", "which drugs were prescribed", "tell me about my prescription"
 - UNKNOWN: Cannot determine intent
 
 **Output Format (JSON only):**
 {
-    "intent": "ORDER_NEW" | "ORDER_REFILL" | "INFO_REQUEST" | "UNKNOWN",
+    "intent": "ORDER_NEW" | "ORDER_REFILL" | "INFO_REQUEST" | "STOCK_CHECK" | "GREETING" | "PRESCRIPTION_QUERY" | "UNKNOWN",
     "confidence": 0.0-1.0,
     "medications": [
         {
@@ -121,6 +124,27 @@ Output: {"intent": "ORDER_NEW", "confidence": 0.95, "medications": [{"name": "ib
 User: "What are the side effects of metformin?"
 Output: {"intent": "INFO_REQUEST", "confidence": 1.0, "medications": [{"name": "metformin", "quantity": null, "dosage": null}], "requires_prescription": false, "summary": "Information request about metformin side effects"}
 
+User: "What medicines do you have in stock?"
+Output: {"intent": "STOCK_CHECK", "confidence": 0.95, "medications": [], "requires_prescription": false, "summary": "Customer asking about available medicines"}
+
+User: "Tell me about the stocks present" or "Show me available inventory"
+Output: {"intent": "STOCK_CHECK", "confidence": 0.95, "medications": [], "requires_prescription": false, "summary": "Customer asking about medicine inventory"}
+
+User: "Hello" or "Hi there"
+Output: {"intent": "GREETING", "confidence": 1.0, "medications": [], "requires_prescription": false, "summary": "Customer greeting"}
+
+User: "Do you have paracetamol available?"
+Output: {"intent": "STOCK_CHECK", "confidence": 0.9, "medications": [{"name": "paracetamol", "quantity": null, "dosage": null}], "requires_prescription": false, "summary": "Checking paracetamol availability"}
+
+User: "Which medicines are in the prescription?" or "What are the dosages for the medications?"
+Output: {"intent": "PRESCRIPTION_QUERY", "confidence": 0.95, "medications": [], "requires_prescription": false, "summary": "Customer asking about prescription contents"}
+
+User: "List all the drugs in my prescription" or "What did the doctor prescribe?"
+Output: {"intent": "PRESCRIPTION_QUERY", "confidence": 0.95, "medications": [], "requires_prescription": false, "summary": "Customer asking about prescribed medications"}
+
+User: "Tell me about the medicines in my prescription and their side effects"
+Output: {"intent": "PRESCRIPTION_QUERY", "confidence": 0.9, "medications": [], "requires_prescription": false, "summary": "Customer asking about prescription medicines and side effects"}
+
 Respond with ONLY valid JSON. No additional text."""
 
     def _build_user_prompt(self, message: str, context: Optional[dict]) -> str:
@@ -132,6 +156,16 @@ Respond with ONLY valid JSON. No additional text."""
                 prompt += f"Customer's active prescriptions: {context['prescriptions']}\n"
             if context.get("recent_orders"):
                 prompt += f"Recent orders: {context['recent_orders']}\n"
+            if context.get("has_prescription_image"):
+                prompt += "Note: Customer has just uploaded a prescription image.\n"
+            if context.get("has_stored_prescription"):
+                prompt += "Note: Customer has previously uploaded a prescription in this session. Questions about 'the prescription', 'medications in prescription', 'dosages' etc. should be classified as PRESCRIPTION_QUERY.\n"
+            if context.get("ocr_medications"):
+                med_names = [m.get("name", "") for m in context["ocr_medications"]]
+                prompt += f"Medications found in uploaded prescription: {', '.join(med_names)}\n"
+            if context.get("stored_prescription"):
+                med_names = [m.get("name", "") for m in context["stored_prescription"]]
+                prompt += f"Medications from previously uploaded prescription: {', '.join(med_names)}\n"
         
         prompt += "\nAnalyze the message and respond with JSON only."
         return prompt

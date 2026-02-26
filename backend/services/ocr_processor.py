@@ -17,12 +17,27 @@ ocr_path = Path(__file__).parent.parent.parent / "ocr"
 if ocr_path.exists():
     sys.path.insert(0, str(ocr_path))
 
+OCR_IMPORT_ERROR = None
+OCR_AVAILABLE = False
+process_prescription_image = None
+# Prefer `model.process_prescription_image` (the repo test script uses this), fall back to `ocr_service`
 try:
-    from ocr_service import process_prescription_image
+    from model import process_prescription_image as _model_process
+    process_prescription_image = _model_process
     OCR_AVAILABLE = True
-except ImportError:
-    OCR_AVAILABLE = False
-    logger.warning("OCR module not available - prescription image processing disabled")
+    OCR_IMPORT_ERROR = None
+    logger.info("Loaded OCR processor from ocr.model")
+except Exception:
+    try:
+        from ocr_service import process_prescription_image as _ocrsvc_process
+        process_prescription_image = _ocrsvc_process
+        OCR_AVAILABLE = True
+        OCR_IMPORT_ERROR = None
+        logger.info("Loaded OCR processor from ocr_service")
+    except Exception as e:
+        OCR_AVAILABLE = False
+        OCR_IMPORT_ERROR = str(e)
+        logger.warning(f"OCR module not available - prescription image processing disabled: {e}")
 
 
 class OCRProcessor:
@@ -41,9 +56,14 @@ class OCRProcessor:
             Dict with OCR results including medications, metadata, and confidence
         """
         if not OCR_AVAILABLE:
+            # Return import error if available to aid debugging
+            err_msg = "OCR service not available"
+            if OCR_IMPORT_ERROR:
+                err_msg = f"OCR import error: {OCR_IMPORT_ERROR}"
+
             return {
                 "status": "error",
-                "error": "OCR service not available",
+                "error": err_msg,
                 "medications": [],
                 "metadata": {}
             }

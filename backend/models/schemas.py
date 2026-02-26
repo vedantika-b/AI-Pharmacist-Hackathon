@@ -16,6 +16,9 @@ class IntentType(str, Enum):
     ORDER_NEW = "ORDER_NEW"
     ORDER_REFILL = "ORDER_REFILL"
     INFO_REQUEST = "INFO_REQUEST"
+    STOCK_CHECK = "STOCK_CHECK"
+    GREETING = "GREETING"
+    PRESCRIPTION_QUERY = "PRESCRIPTION_QUERY"  # Questions about uploaded prescription
     UNKNOWN = "UNKNOWN"
 
 
@@ -208,3 +211,52 @@ class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
     code: Optional[str] = None
+
+
+# ==================== PRESCRIPTION SCAN SCHEMAS ====================
+
+class MedicationItem(BaseModel):
+    """Medication extracted from OCR."""
+    name: str
+    dosage: Optional[str] = None
+    frequency: Optional[str] = None
+    duration: Optional[str] = None
+    quantity: Optional[int] = None
+    instructions: Optional[str] = None
+    confidence: float = Field(default=0.0, ge=0, le=1)
+
+
+class PrescriptionScanCreate(BaseModel):
+    """Data for creating a prescription scan entry."""
+    user_id: Optional[UUID] = None
+    image_url: Optional[str] = None
+    image_filename: Optional[str] = None
+    extracted_text: str
+    medications: list[MedicationItem] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    confidence: float = Field(default=0.0, ge=0, le=1)
+    image_quality: str = "unknown"
+    has_handwriting: bool = False
+    prescription_date: Optional[date] = None
+    doctor_name: Optional[str] = None
+    patient_name: Optional[str] = None
+    processing_time_ms: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class PrescriptionScanResponse(BaseModel):
+    """Response for prescription scan."""
+    id: UUID
+    user_id: Optional[UUID] = None
+    image_url: Optional[str] = None
+    extracted_text: str
+    medications: list[MedicationItem]
+    metadata: dict
+    confidence: float
+    image_quality: str
+    has_handwriting: bool
+    status: str
+    prescription_date: Optional[date] = None
+    doctor_name: Optional[str] = None
+    patient_name: Optional[str] = None
+    created_at: datetime

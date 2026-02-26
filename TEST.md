@@ -1197,31 +1197,31 @@ User 3 (Health User):
    Strength: 500mg
    Category: Diabetes
    Stock: 150
-   Price: $15.00
+  Price: ₹15.00
 
 2. Lisinopril
    Strength: 10mg
    Category: Cardiovascular
    Stock: 200
-   Price: $12.00
+  Price: ₹12.00
 
 3. Insulin
    Strength: 100 units/mL
    Category: Diabetes
    Stock: 50
-   Price: $45.00
+  Price: ₹45.00
 
 4. Amoxicillin
    Strength: 500mg
    Category: Antibiotics
    Stock: 100
-   Price: $8.00
+  Price: ₹8.00
 
 5. Ibuprofen
    Strength: 200mg
    Category: Pain Relief
    Stock: 500
-   Price: $5.00
+  Price: ₹5.00
 ```
 
 ### Sample Messages for Chat Testing

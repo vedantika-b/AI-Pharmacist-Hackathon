@@ -16,6 +16,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -123,8 +124,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const resetPassword = async (email: string) => {
+    if (!supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email as any);
+
+    if (error) {
+      throw error;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );
@@ -139,6 +152,7 @@ export function useAuth() {
       signIn: async () => { throw new Error('Auth not available'); },
       signUp: async () => { throw new Error('Auth not available'); },
       signOut: async () => { throw new Error('Auth not available'); },
+      resetPassword: async () => { throw new Error('Auth not available'); },
     };
   }
   return context;

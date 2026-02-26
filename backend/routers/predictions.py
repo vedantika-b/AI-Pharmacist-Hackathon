@@ -1,16 +1,17 @@
 """
 Predictions router for refill predictions and alerts.
+Generates stock alerts from real inventory data.
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends, Query
+from pydantic import BaseModel
 from supabase import Client
 from uuid import UUID
 from typing import Optional, List
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from core.database import get_supabase_client
 from services.ml_service import MLService
 from repositories.prescription_repository import PrescriptionRepository
-from mock_data import MOCK_REFILL_PREDICTIONS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,146 +20,227 @@ router = APIRouter(prefix="/predictions", tags=["Predictions"])
 
 ml_service = MLService()
 
+# Track notification status in memory (would be in DB in production)
+notification_status = {}
+
+
+class NotifyRequest(BaseModel):
+    alert_id: str
+    notification_type: str = "email"  # email, sms, push
+
 
 @router.get("/refills", response_model=List[dict])
 async def get_refill_predictions(
     user_id: Optional[str] = Query(default=None, description="Filter by user ID"),
-    status: Optional[str] = Query(default=None, description="Filter by status: critical, low, safe"),
+    status_filter: Optional[str] = Query(default=None, alias="status", description="Filter by status: critical, low, safe"),
     limit: int = Query(default=50, ge=1, le=200),
     supabase: Client = Depends(get_supabase_client)
 ):
     """
-    Get refill predictions/alerts.
+    Get stock alerts based on real inventory data.
     
-    Returns predictions with status:
-    - critical: <= 5 days remaining
-    - low: 6-14 days remaining
-    - safe: > 14 days remaining
+    Returns alerts with status:
+    - critical: Stock at or below minimum level
+    - low: Stock above minimum but approaching reorder level (within 50% buffer)
+    - safe: Stock well above minimum level
     """
     try:
         # Check if supabase is available
         if supabase is None:
             raise Exception("Supabase client not initialized")
         
-        query = supabase.table("refill_predictions").select(
-            "*, medicines(name, generic_name, dosage_form, strength)"
-        )
-        
-        if user_id:
-            query = query.eq("customer_id", user_id)
-        
-        query = query.eq("is_active", True)
-        query = query.order("predicted_refill_date")
-        query = query.limit(limit)
-        
+        # Fetch real inventory data from medicines table
+        query = supabase.table("medicines").select("*").eq("is_active", True)
         result = query.execute()
         
-        # Add status based on days remaining
-        today = date.today()
-        predictions = []
+        if not result.data:
+            logger.warning("No medicines found in database")
+            return []
         
-        for pred in result.data:
-            pred_date = date.fromisoformat(pred["predicted_refill_date"])
-            days_remaining = (pred_date - today).days
+        today = date.today()
+        alerts = []
+        
+        for medicine in result.data:
+            stock_qty = medicine.get("stock_quantity", 0)
+            min_stock = medicine.get("min_stock_level", 10)
+            reorder_level = medicine.get("reorder_level", 20)
+            
+            # Calculate status based on stock levels
+            # Assume average daily consumption based on reorder level
+            avg_daily_consumption = max(reorder_level / 30, 1)  # Estimate ~30 days for reorder
+            days_remaining = int(stock_qty / avg_daily_consumption) if avg_daily_consumption > 0 else 999
             
             # Determine status
-            if days_remaining <= 5:
-                pred_status = "critical"
-            elif days_remaining <= 14:
-                pred_status = "low"
+            if stock_qty <= min_stock:
+                alert_status = "critical"
+            elif stock_qty <= min_stock * 1.5:  # Within 50% buffer of minimum
+                alert_status = "low"
             else:
-                pred_status = "safe"
+                alert_status = "safe"
             
             # Filter by status if requested
-            if status and pred_status != status:
+            if status_filter and alert_status != status_filter:
                 continue
             
-            pred["status"] = pred_status
-            pred["days_remaining"] = days_remaining
-            pred["medicine_name"] = pred.get("medicines", {}).get("name", "Unknown")
+            # Calculate predicted refill date
+            predicted_refill_date = (today + timedelta(days=days_remaining)).isoformat()
             
-            predictions.append(pred)
+            # Calculate confidence score based on data quality
+            confidence_score = 0.85 if stock_qty > 0 else 0.5
+            
+            alert_id = f"alert-{medicine['id'][:8]}"
+            
+            alert = {
+                "id": alert_id,
+                "medicine_id": medicine["id"],
+                "medicine_name": medicine.get("name", "Unknown"),
+                "generic_name": medicine.get("generic_name", ""),
+                "brand_name": medicine.get("brand_name", ""),
+                "category": medicine.get("category", "General"),
+                "current_stock": stock_qty,
+                "min_stock_level": min_stock,
+                "reorder_level": reorder_level,
+                "daily_consumption": round(avg_daily_consumption, 2),
+                "predicted_refill_date": predicted_refill_date,
+                "days_remaining": days_remaining,
+                "status": alert_status,
+                "confidence_score": confidence_score,
+                "price": medicine.get("price", 0),
+                "form": medicine.get("form", ""),
+                "strength": medicine.get("strength", ""),
+                "last_order_date": (today - timedelta(days=7)).isoformat(),  # Placeholder
+                "notification_sent": notification_status.get(alert_id, False),
+                "is_active": True
+            }
+            
+            alerts.append(alert)
         
-        return predictions
+        # Sort by status priority (critical first) then by days remaining
+        status_priority = {"critical": 0, "low": 1, "safe": 2}
+        alerts.sort(key=lambda x: (status_priority.get(x["status"], 3), x["days_remaining"]))
+        
+        return alerts[:limit]
     
     except Exception as e:
-        logger.warning(f"Database error, using mock predictions: {e}")
-        # Return mock predictions
-        predictions = MOCK_REFILL_PREDICTIONS.copy()
-        
-        if user_id:
-            predictions = [p for p in predictions if p.get("customer_id") == user_id]
-        
-        if status:
-            predictions = [p for p in predictions if p.get("status") == status]
-        
-        return predictions[:limit]
+        logger.error(f"Error fetching stock alerts: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch stock alerts: {str(e)}"
+        )
 
 
-@router.post("/refills/generate", response_model=dict)
-async def generate_refill_predictions(
-    user_id: UUID,
+@router.get("/refills/{alert_id}", response_model=dict)
+async def get_alert_detail(
+    alert_id: str,
     supabase: Client = Depends(get_supabase_client)
 ):
     """
-    Generate refill predictions for a specific user.
-    This would typically run as a background job.
+    Get detailed information about a specific stock alert.
     """
     try:
-        prescription_repo = PrescriptionRepository(supabase)
+        # Extract medicine ID from alert ID (format: alert-{first8chars})
+        medicine_id_partial = alert_id.replace("alert-", "")
         
-        # Get active prescriptions
-        prescriptions = await prescription_repo.get_user_prescriptions(
-            user_id, active_only=True
-        )
+        # Fetch all medicines and find matching one
+        result = supabase.table("medicines").select("*").eq("is_active", True).execute()
         
-        if not prescriptions:
-            return {
-                "message": "No active prescriptions found for user",
-                "predictions_generated": 0
-            }
+        medicine = None
+        for med in result.data:
+            if med["id"].startswith(medicine_id_partial):
+                medicine = med
+                break
         
-        predictions_created = 0
+        if not medicine:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        stock_qty = medicine.get("stock_quantity", 0)
+        min_stock = medicine.get("min_stock_level", 10)
+        reorder_level = medicine.get("reorder_level", 20)
         
-        # Generate predictions for each prescription
-        for prescription in prescriptions:
-            prediction = ml_service.predict_refill_date(prescription)
-            
-            # Store prediction in database
-            prediction_data = {
-                "customer_id": str(user_id),
-                "medicine_id": str(prescription.product_id),
-                "predicted_refill_date": prediction.predicted_refill_date.isoformat(),
-                "confidence_score": prediction.confidence_score,
-                "average_consumption_days": prescription.days_supply,
-                "last_order_date": prescription.last_filled_date.isoformat() if prescription.last_filled_date else None,
-                "model_name": "RandomForestRegressor",
-                "model_version": "1.0",
-                "features_used": prediction.features_used,
-                "is_active": True,
-                "notification_sent": False
-            }
-            
-            # Upsert prediction
-            supabase.table("refill_predictions")\
-                .upsert(prediction_data)\
-                .execute()
-            
-            predictions_created += 1
+        avg_daily_consumption = max(reorder_level / 30, 1)
+        days_remaining = int(stock_qty / avg_daily_consumption) if avg_daily_consumption > 0 else 999
         
-        logger.info(f"Generated {predictions_created} predictions for user {user_id}")
+        if stock_qty <= min_stock:
+            alert_status = "critical"
+        elif stock_qty <= min_stock * 1.5:
+            alert_status = "low"
+        else:
+            alert_status = "safe"
+        
+        today = date.today()
         
         return {
-            "message": "Predictions generated successfully",
-            "predictions_generated": predictions_created
+            "id": alert_id,
+            "medicine": {
+                "id": medicine["id"],
+                "name": medicine.get("name", "Unknown"),
+                "generic_name": medicine.get("generic_name", ""),
+                "brand_name": medicine.get("brand_name", ""),
+                "description": medicine.get("description", ""),
+                "category": medicine.get("category", "General"),
+                "form": medicine.get("form", ""),
+                "strength": medicine.get("strength", ""),
+                "price": medicine.get("price", 0),
+                "prescription_required": medicine.get("prescription_required", False)
+            },
+            "stock_info": {
+                "current_stock": stock_qty,
+                "min_stock_level": min_stock,
+                "reorder_level": reorder_level,
+                "daily_consumption": round(avg_daily_consumption, 2),
+                "days_remaining": days_remaining
+            },
+            "alert_info": {
+                "status": alert_status,
+                "predicted_refill_date": (today + timedelta(days=days_remaining)).isoformat(),
+                "notification_sent": notification_status.get(alert_id, False),
+                "last_notification_date": None,
+                "recommendation": get_recommendation(alert_status, days_remaining, stock_qty, min_stock)
+            }
         }
-    
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generating predictions: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        logger.error(f"Error fetching alert detail: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/refills/{alert_id}/notify", response_model=dict)
+async def send_notification(
+    alert_id: str,
+    request: NotifyRequest,
+    supabase: Client = Depends(get_supabase_client)
+):
+    """
+    Send notification for a stock alert.
+    In production, this would integrate with email/SMS services.
+    """
+    try:
+        # Mark as notified
+        notification_status[alert_id] = True
+        
+        # Log the notification
+        logger.info(f"Notification sent for alert {alert_id} via {request.notification_type}")
+        
+        return {
+            "success": True,
+            "alert_id": alert_id,
+            "notification_type": request.notification_type,
+            "message": f"Notification sent successfully via {request.notification_type}",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error sending notification: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_recommendation(status: str, days_remaining: int, current_stock: int, min_stock: int) -> str:
+    """Generate a recommendation based on alert status."""
+    if status == "critical":
+        return f"URGENT: Stock is critically low ({current_stock} units). Place an order immediately to avoid stockout."
+    elif status == "low":
+        return f"Stock is running low with approximately {days_remaining} days of supply remaining. Consider placing an order soon."
+    else:
+        return f"Stock levels are healthy with {days_remaining} days of supply. No immediate action required."
 
 
 @router.get("/stats", response_model=dict)
@@ -166,39 +248,26 @@ async def get_prediction_stats(
     supabase: Client = Depends(get_supabase_client)
 ):
     """
-    Get aggregated statistics about refill predictions.
+    Get aggregated statistics about stock alerts.
     """
     try:
-        result = supabase.table("refill_predictions")\
-            .select("*")\
-            .eq("is_active", True)\
-            .execute()
+        # Fetch all alerts to compute stats
+        alerts = await get_refill_predictions(supabase=supabase)
         
-        today = date.today()
-        critical_count = 0
-        low_count = 0
-        safe_count = 0
-        
-        for pred in result.data:
-            pred_date = date.fromisoformat(pred["predicted_refill_date"])
-            days_remaining = (pred_date - today).days
-            
-            if days_remaining <= 5:
-                critical_count += 1
-            elif days_remaining <= 14:
-                low_count += 1
-            else:
-                safe_count += 1
+        critical_count = sum(1 for a in alerts if a.get("status") == "critical")
+        low_count = sum(1 for a in alerts if a.get("status") == "low")
+        safe_count = sum(1 for a in alerts if a.get("status") == "safe")
         
         return {
-            "total_predictions": len(result.data),
+            "total_alerts": len(alerts),
             "critical": critical_count,
             "low": low_count,
-            "safe": safe_count
+            "safe": safe_count,
+            "last_updated": datetime.now().isoformat()
         }
     
     except Exception as e:
-        logger.error(f"Error fetching prediction stats: {e}")
+        logger.error(f"Error fetching alert stats: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

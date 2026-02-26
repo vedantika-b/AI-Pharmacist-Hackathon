@@ -23,6 +23,7 @@ import { useTheme } from "next-themes"
 import { useLanguage } from "@/contexts/LanguageContext"
 import { LanguageSelector } from "@/components/LanguageSelector"
 import { t } from "@/lib/translations"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function LandingPage() {
   const { user, loading } = useAuth()

@@ -192,7 +192,7 @@ Patient Types in Chat:
       "status": "approved",
       "order_id": "ORD-12345",
       "estimated_ready": "2024-02-24",
-      "cost": "$25.00"
+      "cost": "₹25.00"
     }
          │
          ▼

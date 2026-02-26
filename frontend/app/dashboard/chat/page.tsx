@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Send, Mic, Bot, User, Volume2, Square } from "lucide-react"
+import { Send, Mic, Bot, User, Volume2, Square, ImagePlus, X, FileImage } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { sendChatMessage } from "@/lib/api"
 import { getCurrentUser } from "@/lib/supabase"
@@ -25,13 +25,19 @@ interface Message {
   intent?: string
   confidence?: number
   suggestions?: string[]
+  imagePreview?: string  // For displaying uploaded images
+  ocrData?: {
+    status: string
+    confidence?: number
+    medication_count?: number
+  }
 }
 
 const initialMessages: Message[] = [
   {
     id: "1",
     type: "ai",
-    content: "Hello! I'm your AI Pharmacist assistant. How can I help you today? You can ask me about medications, dosages, drug interactions, or order refills.",
+    content: "Hello! I'm your AI Pharmacist assistant. How can I help you today?\n\nYou can:\n• Ask about medications, dosages, or drug interactions\n• **Upload a prescription image** using the 📷 button to get it analyzed\n• Order refills or check medicine availability\n• Use voice input by clicking the microphone",
     timestamp: new Date()
   }
 ]
@@ -42,12 +48,16 @@ export default function ChatPage() {
   const [input, setInput] = useState("")
   const [isTyping, setIsTyping] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [sessionId] = useState<string>(() => `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Voice hooks
   const { isListening, startListening, stopListening } = useVoiceInput({
-    language: language === "hi" ? "hi-IN" : language === "mr" ? "mr-IN" : "en-US",
+    language: language === "hi" ? "hi-IN" : language === "mr" ? "mr-IN" : "en-IN",
     onTranscript: (transcript) => {
       setInput(transcript)
     },
@@ -57,7 +67,7 @@ export default function ChatPage() {
   })
 
   const { isSpeaking, speak, stop } = useTextToSpeech({
-    language: language === "hi" ? "hi-IN" : language === "mr" ? "mr-IN" : "en-US",
+    language: language === "hi" ? "hi-IN" : language === "mr" ? "mr-IN" : "en-IN",
     rate: 1,
     pitch: 1,
     volume: 1,
@@ -76,24 +86,72 @@ export default function ChatPage() {
     }
   }, [messages, isTyping])
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file')
+        return
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB')
+        return
+      }
+      
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string
+        // Remove data URL prefix for API
+        const base64Data = base64.split(',')[1]
+        setSelectedImage(base64Data)
+        setImagePreview(base64)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const clearSelectedImage = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const handleSend = async () => {
-    if (!input.trim()) return
+    if (!input.trim() && !selectedImage) return
 
     const userMessage: Message = {
       id: Date.now().toString(),
       type: "user",
-      content: input,
-      timestamp: new Date()
+      content: input || (selectedImage ? "📷 Prescription image uploaded" : ""),
+      timestamp: new Date(),
+      imagePreview: imagePreview || undefined
     }
 
     setMessages(prev => [...prev, userMessage])
-    const userInput = input
+    const userInput = input || "Please analyze this prescription image"
+    const imageToSend = selectedImage
     setInput("")
+    clearSelectedImage()
     setIsTyping(true)
 
     try {
-      // Call real API
-      const response = await sendChatMessage(userInput, userId || undefined)
+      // Call real API with image if provided and session ID for context
+      const response = await sendChatMessage(userInput, userId || undefined, imageToSend || undefined, sessionId) as {
+        response: string
+        intent?: string
+        confidence?: number
+        suggestions?: string[]
+        ocr_data?: {
+          status: string
+          confidence?: number
+          medication_count?: number
+        }
+      }
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -102,7 +160,8 @@ export default function ChatPage() {
         timestamp: new Date(),
         intent: response.intent,
         confidence: response.confidence,
-        suggestions: response.suggestions
+        suggestions: response.suggestions,
+        ocrData: response.ocr_data
       }
       setMessages(prev => [...prev, aiMessage])
     } catch (error) {
@@ -138,6 +197,21 @@ export default function ChatPage() {
       e.preventDefault()
       handleSend()
     }
+  }
+
+  const formatMessageHtml = (text: string) => {
+    if (!text) return ""
+    // Escape HTML to avoid XSS
+    const escaped = text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+
+    // Convert **bold** to <strong>
+    const withBold = escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+
+    // Preserve newlines
+    return withBold.replace(/\n/g, "<br />")
   }
 
   return (
@@ -182,9 +256,39 @@ export default function ChatPage() {
                         : "bg-muted"
                     )}
                   >
+                    {/* Show uploaded image for user messages */}
+                    {message.type === "user" && message.imagePreview && (
+                      <div className="mb-3">
+                        <img 
+                          src={message.imagePreview} 
+                          alt="Uploaded prescription" 
+                          className="max-w-[200px] max-h-[200px] rounded-lg object-cover border border-primary-foreground/20"
+                        />
+                      </div>
+                    )}
+                    
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                      {message.content}
+                      {message.type === "ai" ? (
+                        <span dangerouslySetInnerHTML={{ __html: formatMessageHtml(message.content) }} />
+                      ) : (
+                        message.content
+                      )}
                     </p>
+                    
+                    {/* Show OCR processing badge for AI messages with OCR data */}
+                    {message.type === "ai" && message.ocrData && (
+                      <div className="flex gap-2 mt-3 flex-wrap">
+                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          <FileImage className="h-3 w-3 mr-1" />
+                          OCR: {message.ocrData.status}
+                        </Badge>
+                        {message.ocrData.medication_count !== undefined && message.ocrData.medication_count > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            {message.ocrData.medication_count} medication(s) found
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                     
                     {/* Speak button for AI messages */}
                     {message.type === "ai" && (
@@ -301,7 +405,52 @@ export default function ChatPage() {
 
         {/* Input Area */}
         <div className="border-t p-6 bg-background">
+          {/* Image Preview */}
+          {imagePreview && (
+            <div className="max-w-4xl mx-auto mb-4">
+              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                <img 
+                  src={imagePreview} 
+                  alt="Selected prescription" 
+                  className="w-16 h-16 object-cover rounded-lg"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Prescription Image</p>
+                  <p className="text-xs text-muted-foreground">Ready to analyze</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={clearSelectedImage}
+                  className="h-8 w-8"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          
           <div className="max-w-4xl mx-auto flex gap-4">
+            {/* Hidden file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImageSelect}
+              accept="image/*"
+              className="hidden"
+            />
+            
+            {/* Image upload button */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="shrink-0 h-12 w-12"
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload prescription image"
+            >
+              <ImagePlus className="h-5 w-5" />
+            </Button>
+            
             <Button
               variant={isListening ? "default" : "outline"}
               size="icon"
@@ -316,12 +465,12 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={t('chatPlaceholder', language)}
+                placeholder={imagePreview ? "Ask a question about the prescription..." : t('chatPlaceholder', language)}
                 className="flex-1 h-12"
               />
               <Button
                 onClick={handleSend}
-                disabled={!input.trim() || isTyping}
+                disabled={(!input.trim() && !selectedImage) || isTyping}
                 className="h-12 px-6"
               >
                 <Send className="h-5 w-5" />

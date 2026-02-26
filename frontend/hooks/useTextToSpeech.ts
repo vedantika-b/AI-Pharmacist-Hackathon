@@ -10,7 +10,7 @@ interface UseTextToSpeechOptions {
 }
 
 export function useTextToSpeech(options: UseTextToSpeechOptions = {}) {
-  const { rate = 1, pitch = 1, volume = 1, language = 'en-US' } = options;
+  const { rate = 1, pitch = 1, volume = 1, language = 'en-IN' } = options;
   const [isSpeaking, setIsSpeaking] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 

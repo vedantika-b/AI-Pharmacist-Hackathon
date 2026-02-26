@@ -49,7 +49,7 @@ const text = t('chatPlaceholder', language)  // Get translated text
 **Usage:**
 ```typescript
 const { isListening, startListening, stopListening } = useVoiceInput({
-  language: 'en-US',  // or 'hi-IN' or 'mr-IN'
+  language: 'en-IN',  // or 'hi-IN' or 'mr-IN'
   onTranscript: (text) => setInput(text)
 })
 ```
@@ -71,7 +71,7 @@ const { isListening, startListening, stopListening } = useVoiceInput({
 **Usage:**
 ```typescript
 const { isSpeaking, speak, stop } = useTextToSpeech({
-  language: 'en-US',  // or 'hi-IN' or 'mr-IN'
+  language: 'en-IN',  // or 'hi-IN' or 'mr-IN'
   rate: 1,
   pitch: 1,
   volume: 1

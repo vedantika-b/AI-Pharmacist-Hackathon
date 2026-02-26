@@ -10,15 +10,109 @@ from uuid import UUID
 from core.database import get_supabase_client
 from services.llm_service import LLMService
 from services.ocr_processor import OCRProcessor, extract_medications_from_ocr, format_ocr_metadata
+from services.prescription_llm_parser import enhance_ocr_with_llm
 from repositories.prescription_repository import PrescriptionRepository
+from mock_data import MOCK_MEDICINES
 import logging
 import base64
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 llm_service = LLMService()
+
+# Session-based prescription context storage (in production, use Redis or DB)
+# Key: session_id or user_id, Value: {ocr_data, medications, timestamp}
+prescription_context: dict = {}
+
+# Context expiry time (30 minutes)
+CONTEXT_EXPIRY_MINUTES = 30
+
+
+def get_session_key(user_id: Optional[UUID], session_id: Optional[str]) -> str:
+    """Generate a session key for context storage."""
+    if session_id:
+        return f"session_{session_id}"
+    elif user_id:
+        return f"user_{user_id}"
+    return "default_session"
+
+
+def store_prescription_context(session_key: str, ocr_data: dict, medications: list, raw_text: str = ""):
+    """Store prescription context for follow-up questions."""
+    prescription_context[session_key] = {
+        "ocr_data": ocr_data,
+        "medications": medications,
+        "raw_text": raw_text,
+        "timestamp": datetime.now()
+    }
+    logger.info(f"Stored prescription context for {session_key}: {len(medications)} medications, raw_text length: {len(raw_text)}")
+
+
+def get_prescription_context(session_key: str) -> Optional[dict]:
+    """Retrieve prescription context if not expired."""
+    ctx = prescription_context.get(session_key)
+    if ctx:
+        age = datetime.now() - ctx["timestamp"]
+        if age < timedelta(minutes=CONTEXT_EXPIRY_MINUTES):
+            return ctx
+        else:
+            # Expired, remove it
+            del prescription_context[session_key]
+            logger.info(f"Prescription context expired for {session_key}")
+    return None
+
+
+def format_prescription_response(medications: list, query_type: str = "list") -> str:
+    """Format prescription medications for response."""
+    if not medications:
+        return "I don't have any prescription data to show. Please upload a prescription image first using the 📷 button."
+    
+    response = f"Based on your prescription, I found **{len(medications)} medication(s)**:\n\n"
+    
+    for i, med in enumerate(medications, 1):
+        name = med.get("name", "Unknown")
+        dosage = med.get("dosage", "N/A")
+        frequency = med.get("frequency", "N/A")
+        duration = med.get("duration", "N/A")
+        quantity = med.get("quantity", "N/A")
+        instructions = med.get("instructions", "")
+        
+        response += f"**{i}. {name}**\n"
+        response += f"   • Dosage: {dosage}\n"
+        response += f"   • Frequency: {frequency}\n"
+        if duration and duration != "N/A":
+            response += f"   • Duration: {duration}\n"
+        if quantity and quantity != "N/A":
+            response += f"   • Quantity: {quantity}\n"
+        if instructions:
+            response += f"   • Instructions: {instructions}\n"
+        response += "\n"
+    
+    return response
+
+
+async def get_medicines_from_db(supabase: Client, search: str = None, limit: int = 10) -> List[dict]:
+    """Fetch medicines from database or fall back to mock data."""
+    try:
+        if supabase:
+            query = supabase.table("medicines").select("*")
+            if search:
+                query = query.ilike("name", f"%{search}%")
+            query = query.limit(limit)
+            result = query.execute()
+            if result.data:
+                return result.data
+    except Exception as e:
+        logger.warning(f"Failed to fetch medicines from DB: {e}")
+    
+    # Fallback to mock data
+    medicines = MOCK_MEDICINES
+    if search:
+        medicines = [m for m in medicines if search.lower() in m.get("name", "").lower()]
+    return medicines[:limit]
 
 
 class ChatRequest(BaseModel):
@@ -55,9 +149,13 @@ async def chat(
     4. Trigger actions (orders, info requests, refills)
     """
     try:
+        # Get session key for context storage
+        session_key = get_session_key(request.user_id, request.session_id)
+        
         # Process prescription image if provided
         ocr_data = None
         extracted_medications = []
+        ocr_raw_text = ""  # Store raw text from OCR for use in PRESCRIPTION_QUERY
         
         if request.image_base64:
             logger.info("Processing prescription image with OCR")
@@ -67,13 +165,27 @@ async def chat(
             )
             
             if ocr_result.get("status") != "error":
+                # Get raw OCR text and store for later use
+                ocr_raw_text = ocr_result.get("extracted_text", "")
+                
+                # Enhance OCR results with LLM for better medication extraction
+                try:
+                    ocr_result = await enhance_ocr_with_llm(ocr_result)
+                    logger.info(f"LLM enhanced OCR, llm_enhanced: {ocr_result.get('llm_enhanced')}")
+                except Exception as e:
+                    logger.warning(f"LLM enhancement failed, using basic OCR: {e}")
+                
                 ocr_data = {
                     "status": ocr_result.get("status"),
                     "confidence": ocr_result.get("confidence"),
                     "metadata": format_ocr_metadata(ocr_result),
-                    "medication_count": len(ocr_result.get("medications", []))
+                    "medication_count": len(ocr_result.get("medications", [])),
+                    "llm_enhanced": ocr_result.get("llm_enhanced", False)
                 }
                 extracted_medications = extract_medications_from_ocr(ocr_result)
+                
+                # Store the prescription context with raw text for follow-up questions
+                store_prescription_context(session_key, ocr_data, extracted_medications, ocr_raw_text)
                 
                 # If OCR found medications and user didn't provide a message, create one
                 if extracted_medications and not request.message:
@@ -105,6 +217,20 @@ async def chat(
         if extracted_medications:
             context["ocr_medications"] = extracted_medications
             context["has_prescription_image"] = True
+            logger.info(f"Added {len(extracted_medications)} OCR medications to context")
+        
+        # Check for existing prescription context (for follow-up questions)
+        # This also catches the case where OCR was just done in this request
+        existing_context = get_prescription_context(session_key)
+        if existing_context:
+            # Use stored context if we don't have fresh extracted medications
+            if not extracted_medications:
+                context["stored_prescription"] = existing_context["medications"]
+                context["has_stored_prescription"] = True
+                logger.info(f"Using stored prescription context: {len(existing_context.get('medications', []))} medications")
+            # Also add raw text for better context
+            if existing_context.get("raw_text"):
+                context["prescription_raw_text"] = existing_context["raw_text"][:500]  # Limit size
         
         # Extract intent
         try:
@@ -141,7 +267,10 @@ async def chat(
         
         if llm_output.intent.value == "ORDER_NEW":
             med_names = ", ".join([m.name if hasattr(m, 'name') else m.get("name", "") for m in all_medications])
-            response_text = f"I understand you want to order {med_names}. "
+            if med_names:
+                response_text = f"I understand you want to order {med_names}. "
+            else:
+                response_text = "I understand you want to order medicines. "
             if llm_output.requires_prescription:
                 response_text += "Please note that prescription verification will be required. "
             response_text += "Would you like me to proceed with creating your order?"
@@ -154,7 +283,10 @@ async def chat(
         
         elif llm_output.intent.value == "INFO_REQUEST":
             med_names = ", ".join([m.name if hasattr(m, 'name') else m.get("name", "") for m in all_medications])
-            response_text = f"I can provide information about {med_names}. What would you like to know?"
+            if med_names:
+                response_text = f"I can provide information about {med_names}. What would you like to know?"
+            else:
+                response_text = "I can provide information about any medicine. Which medicine would you like to know about?"
             suggestions = [
                 "Dosage instructions",
                 "Side effects",
@@ -162,9 +294,89 @@ async def chat(
                 "Price and availability"
             ]
         
+        elif llm_output.intent.value == "STOCK_CHECK":
+            # Fetch real medicines from database
+            medicines = await get_medicines_from_db(supabase, limit=10)
+            
+            if all_medications:
+                # User asked about specific medicines
+                med_names = [m.name if hasattr(m, 'name') else m.get("name", "") for m in all_medications]
+                search_name = med_names[0] if med_names else None
+                if search_name:
+                    medicines = await get_medicines_from_db(supabase, search=search_name, limit=5)
+            
+            if medicines:
+                # Format medicine list
+                stock_info = []
+                for med in medicines[:5]:
+                    name = med.get("name", "Unknown")
+                    stock = med.get("stock_quantity", 0)
+                    price = med.get("price", 0)
+                    rx = "Rx Required" if med.get("prescription_required") else "OTC"
+                    stock_info.append(f"• **{name}**: {stock} in stock, ₹{price:.2f} ({rx})")
+                
+                response_text = f"Here are the available medicines:\n\n" + "\n".join(stock_info)
+                response_text += f"\n\nWe have {len(MOCK_MEDICINES) if not supabase else 'many more'} medicines in our catalog. Would you like to order any of these?"
+            else:
+                response_text = "I couldn't find specific stock information. Please check our Medicines page for the complete catalog."
+            
+            suggestions = ["Order medicine", "Search specific medicine", "View all categories"]
+        
+        elif llm_output.intent.value == "PRESCRIPTION_QUERY":
+            # Handle questions about prescription (uploaded or stored)
+            prescription_meds = []
+            prescription_raw_text = ""
+            
+            # If user just uploaded an image in this request, prioritize that
+            if request.image_base64 and ocr_data:
+                prescription_meds = extracted_medications
+                # Use raw_text from current OCR processing
+                prescription_raw_text = ocr_raw_text
+                logger.info(f"Using just-uploaded image: {len(prescription_meds)} meds, raw_text_len={len(prescription_raw_text)}")
+            # Otherwise check fresh OCR medications
+            elif extracted_medications:
+                prescription_meds = extracted_medications
+                prescription_raw_text = ocr_raw_text  # Also capture raw text
+                logger.info(f"Using fresh OCR medications: {len(prescription_meds)}")
+            # Otherwise check stored context
+            elif existing_context:
+                prescription_meds = existing_context.get("medications", [])
+                prescription_raw_text = existing_context.get("raw_text", "")
+                logger.info(f"Using stored context medications: {len(prescription_meds)}")
+            
+            if prescription_meds:
+                response_text = format_prescription_response(prescription_meds)
+                response_text += "\nWould you like to know more about any of these medications, or shall I help you order them?"
+                suggestions = ["Order these medicines", "Tell me about side effects", "Check drug interactions", "Upload new prescription"]
+                all_medications = prescription_meds
+            elif prescription_raw_text or (ocr_data and ocr_data.get("status") == "partial"):
+                # We have raw text but no parsed medications - show what was found
+                stored_raw = existing_context.get("raw_text", "") if existing_context else ""
+                display_text = prescription_raw_text or stored_raw or ocr_raw_text
+                if display_text:
+                    # Truncate for display
+                    display_text = display_text[:800] if len(display_text) > 800 else display_text
+                    response_text = f"I was able to read your prescription image, but had difficulty extracting specific medication names. Here's the text I found:\n\n{display_text}\n\nCould you tell me which specific medications you'd like to know about?"
+                else:
+                    response_text = "I was able to partially read your prescription but couldn't extract the medication details clearly. Could you tell me the medication names, or try uploading a clearer image?"
+                suggestions = ["Try uploading again", "Tell me medications manually", "Order medicine"]
+            else:
+                response_text = "I don't have any prescription data to reference. Please upload a prescription image first using the 📷 button, and then I can answer your questions about it."
+                suggestions = ["Upload prescription", "Order medicine manually", "Check available stock"]
+        
+        elif llm_output.intent.value == "GREETING":
+            response_text = "Hello! 👋 Welcome to AI Pharmacist. I'm here to help you with:\n\n"
+            response_text += "• **Order medicines** - Just tell me what you need\n"
+            response_text += "• **Refill prescriptions** - I'll check your prescription status\n"
+            response_text += "• **Check stock** - Ask about medicine availability\n"
+            response_text += "• **Get medicine info** - Side effects, dosage, interactions\n"
+            response_text += "• **Upload prescription** - 📷 Click the image button to analyze\n\n"
+            response_text += "How can I help you today?"
+            suggestions = ["Show available medicines", "Order medicine", "Refill prescription", "Upload prescription"]
+        
         else:
             response_text = "I'm not sure I understood your request completely. Could you please provide more details about what you need?"
-            suggestions = ["Order new medicine", "Refill prescription", "Get medicine info"]
+            suggestions = ["Order new medicine", "Refill prescription", "Check stock", "Get medicine info"]
         
         return ChatResponse(
             response=response_text,

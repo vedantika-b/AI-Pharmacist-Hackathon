@@ -4,15 +4,17 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Upload, Loader2, AlertCircle, CheckCircle2, FileText } from "lucide-react"
+import { Upload, Loader2, AlertCircle, CheckCircle2, FileText, Save, Database } from "lucide-react"
 import { useLanguage } from "@/contexts/LanguageContext"
 import { t } from "@/lib/translations"
 
 export default function OCRDemoPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string; id?: string } | null>(null)
   const { language } = useLanguage()
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,39 +37,112 @@ export default function OCRDemoPage() {
       setLoading(true)
       setError(null)
       setResult(null)
+      setSaveStatus(null)
 
       // Convert to base64
       const reader = new FileReader()
       reader.onload = async () => {
-        const base64 = reader.result as string
+        try {
+          const base64 = reader.result as string
 
-        // Call demo endpoint
-        const response = await fetch(
-          "http://localhost:8000/api/v1/prescriptions/demo/analyze",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              image_base64: base64,
-              filename: selectedFile.name,
-            }),
+          // Call real OCR endpoint (uses the OCR model service)
+          const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "")
+          const response = await fetch(
+            `${apiBase}/api/v1/prescriptions/analyze`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                image_base64: base64,
+                filename: selectedFile.name,
+              }),
+            }
+          )
+
+          // Attempt to parse JSON body for error details even when response is not ok
+          let data: any = null
+          try {
+            data = await response.json()
+          } catch (e) {
+            // Ignore JSON parse errors
           }
-        )
 
-        if (!response.ok) {
-          throw new Error("Failed to process image")
+          if (!response.ok) {
+            // Prefer common patterns: `detail`, `error`, or top-level message
+            const detail = data?.detail || data?.error || data?.message || "Failed to process image"
+            setError(typeof detail === "string" ? detail : JSON.stringify(detail))
+            setLoading(false)
+            return
+          }
+
+          setResult(data)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to process image")
+        } finally {
+          setLoading(false)
         }
-
-        const data = await response.json()
-        setResult(data)
       }
       reader.readAsDataURL(selectedFile)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process image")
-    } finally {
       setLoading(false)
+    }
+  }
+
+  const saveToDB = async () => {
+    if (!result) return
+
+    try {
+      setSaving(true)
+      setSaveStatus(null)
+
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "")
+      
+      // Prepare save request
+      const saveData = {
+        extracted_text: result.extracted_text || "",
+        medications: result.medications || [],
+        metadata: result.metadata || {},
+        confidence: result.confidence || 0,
+        image_quality: result.metadata?.image_quality || "unknown",
+        has_handwriting: result.metadata?.has_handwriting || false,
+        prescription_date: result.metadata?.prescription_date || null,
+        doctor_name: result.metadata?.doctor_name || null,
+        image_filename: selectedFile?.name || null,
+        // user_id can be added when authentication is implemented
+      }
+
+      const response = await fetch(`${apiBase}/api/v1/prescriptions/save`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(saveData),
+      })
+
+      const data = await response.json()
+
+      if (data.status === "success") {
+        setSaveStatus({
+          success: true,
+          message: `Prescription saved successfully! ID: ${data.id}`,
+          id: data.id
+        })
+      } else {
+        setSaveStatus({
+          success: false,
+          message: data.error || "Failed to save prescription"
+        })
+      }
+    } catch (err) {
+      setSaveStatus({
+        success: false,
+        message: err instanceof Error ? err.message : "Failed to save prescription"
+      })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -265,6 +340,61 @@ export default function OCRDemoPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Save to Database Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Save to Database
+              </CardTitle>
+              <CardDescription>
+                Store this prescription scan for future reference
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button
+                onClick={saveToDB}
+                disabled={saving || saveStatus?.success}
+                className="w-full gap-2"
+                variant={saveStatus?.success ? "secondary" : "default"}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : saveStatus?.success ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Save Prescription
+                  </>
+                )}
+              </Button>
+
+              {saveStatus && (
+                <div
+                  className={`p-4 rounded-lg flex items-start gap-2 ${
+                    saveStatus.success
+                      ? "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-200"
+                      : "bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-200"
+                  }`}
+                >
+                  {saveStatus.success ? (
+                    <CheckCircle2 className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                  )}
+                  <span className="text-sm">{saveStatus.message}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

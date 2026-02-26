@@ -242,7 +242,7 @@ Features:
 ```
 - No backend server needed for OCR
 - All processing in browser or simple API
-- Lower cost (~$0/month)
+- Lower cost (~₹0/month)
 - Moderate accuracy (~85%)
 - Setup time: 2 days
 ```
@@ -253,7 +253,7 @@ Features:
 - Better accuracy (~90%)
 - Can handle complex layouts
 - Setup time: 1-2 days
-- Cost: Low (~$0-50/month)
+- Cost: Low (~₹0-50/month)
 ```
 
 **Option C: Enterprise (Google Vision API, 9 days)**
@@ -262,7 +262,7 @@ Features:
 - Handles complex prescriptions
 - Great support
 - Setup time: 1 day
-- Cost: Medium ($0.60-1.50 per image)
+- Cost: Medium (₹0.60-1.50 per image)
 ```
 
 ---

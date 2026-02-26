@@ -5,10 +5,10 @@ import { motion } from "framer-motion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Bell, AlertTriangle, CheckCircle, Clock, Pill, Calendar, Loader2 } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Bell, AlertTriangle, CheckCircle, Clock, Pill, Calendar, Loader2, Package, TrendingDown, Info, Send, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getRefillPredictions } from "@/lib/api"
-import type { RefillPrediction } from "@/lib/types"
+import { getRefillPredictions, getAlertDetail, sendAlertNotification } from "@/lib/api"
 
 const statusConfig = {
   critical: {
@@ -56,6 +56,19 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string | null>(null)
+  const [selectedAlert, setSelectedAlert] = useState<any>(null)
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [notifyingId, setNotifyingId] = useState<string | null>(null)
+  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
+
+  // Auto-hide notification after 3 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [notification])
 
   useEffect(() => {
     fetchAlerts()
@@ -68,9 +81,74 @@ export default function AlertsPage() {
       setAlerts(data)
     } catch (error) {
       console.error('Failed to fetch alerts:', error)
+      setNotification({ type: 'error', message: 'Failed to load alerts' })
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleViewAlert = async (alert: any) => {
+    try {
+      setLoadingDetail(true)
+      setDetailDialogOpen(true)
+      const detail = await getAlertDetail(alert.id) as any
+      setSelectedAlert(detail)
+    } catch (error) {
+      console.error('Failed to fetch alert detail:', error)
+      // Fallback to basic alert data
+      setSelectedAlert({
+        id: alert.id,
+        medicine: {
+          name: alert.medicine_name,
+          generic_name: alert.generic_name || '',
+          category: alert.category || 'General',
+          form: alert.form || '',
+          strength: alert.strength || '',
+          price: alert.price || 0
+        },
+        stock_info: {
+          current_stock: alert.current_stock,
+          min_stock_level: alert.min_stock_level,
+          reorder_level: alert.reorder_level,
+          daily_consumption: alert.daily_consumption,
+          days_remaining: alert.days_remaining
+        },
+        alert_info: {
+          status: alert.status,
+          predicted_refill_date: alert.predicted_refill_date,
+          notification_sent: alert.notification_sent,
+          recommendation: getRecommendation(alert)
+        }
+      })
+    } finally {
+      setLoadingDetail(false)
+    }
+  }
+
+  const handleNotify = async (alertId: string) => {
+    try {
+      setNotifyingId(alertId)
+      await sendAlertNotification(alertId, 'email')
+      setNotification({ type: 'success', message: 'Notification sent successfully!' })
+      // Update local state to reflect notification sent
+      setAlerts(prev => prev.map(a => 
+        a.id === alertId ? { ...a, notification_sent: true } : a
+      ))
+    } catch (error) {
+      console.error('Failed to send notification:', error)
+      setNotification({ type: 'error', message: 'Failed to send notification' })
+    } finally {
+      setNotifyingId(null)
+    }
+  }
+
+  const getRecommendation = (alert: any) => {
+    if (alert.status === 'critical') {
+      return `URGENT: Stock is critically low (${alert.current_stock} units). Place an order immediately.`
+    } else if (alert.status === 'low') {
+      return `Stock is running low with ${alert.days_remaining} days remaining. Consider placing an order soon.`
+    }
+    return `Stock levels are healthy with ${alert.days_remaining} days of supply.`
   }
 
   const filteredAlerts = filter 
@@ -83,6 +161,26 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Notification Banner */}
+      {notification && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className={cn(
+            "fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2",
+            notification.type === 'success' && "bg-green-500 text-white",
+            notification.type === 'error' && "bg-red-500 text-white"
+          )}
+        >
+          {notification.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+          {notification.message}
+          <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-70">
+            <X className="h-4 w-4" />
+          </button>
+        </motion.div>
+      )}
+
       <div>
         <h1 className="text-4xl font-bold mb-2">Refill Alerts</h1>
         <p className="text-muted-foreground">
@@ -265,14 +363,26 @@ export default function AlertsPage() {
                             </div>
 
                             <div className="flex items-end gap-2">
-                              <Button size="sm" variant="outline" className="flex-1">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="flex-1"
+                                onClick={() => handleViewAlert(alert)}
+                              >
+                                <Info className="h-3 w-3 mr-1" />
                                 View
                               </Button>
                               <Button 
                                 size="sm" 
                                 className="flex-1"
-                                disabled={alert.notification_sent}
+                                disabled={alert.notification_sent || notifyingId === alert.id}
+                                onClick={() => handleNotify(alert.id)}
                               >
+                                {notifyingId === alert.id ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <Send className="h-3 w-3 mr-1" />
+                                )}
                                 {alert.notification_sent ? 'Notified' : 'Notify'}
                               </Button>
                             </div>
@@ -287,6 +397,131 @@ export default function AlertsPage() {
           })}
         </motion.div>
       )}
+
+      {/* Alert Detail Dialog */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pill className="h-5 w-5" />
+              Alert Details
+            </DialogTitle>
+            <DialogDescription>
+              Stock alert information and recommendations
+            </DialogDescription>
+          </DialogHeader>
+          
+          {loadingDetail ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : selectedAlert ? (
+            <div className="space-y-6">
+              {/* Medicine Info */}
+              <div className="p-4 rounded-lg bg-muted/50">
+                <h3 className="font-semibold text-lg mb-2">
+                  {selectedAlert.medicine?.name || 'Unknown Medicine'}
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Generic Name:</span>
+                    <p className="font-medium">{selectedAlert.medicine?.generic_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Category:</span>
+                    <p className="font-medium">{selectedAlert.medicine?.category || 'General'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Form:</span>
+                    <p className="font-medium">{selectedAlert.medicine?.form || 'N/A'} {selectedAlert.medicine?.strength || ''}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Price:</span>
+                    <p className="font-medium">₹{selectedAlert.medicine?.price?.toFixed(2) || '0.00'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stock Info */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <Package className="h-6 w-6 mx-auto mb-2 text-blue-500" />
+                    <p className="text-xs text-muted-foreground">Current Stock</p>
+                    <p className="text-2xl font-bold">{selectedAlert.stock_info?.current_stock || 0}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <TrendingDown className="h-6 w-6 mx-auto mb-2 text-orange-500" />
+                    <p className="text-xs text-muted-foreground">Min Level</p>
+                    <p className="text-2xl font-bold">{selectedAlert.stock_info?.min_stock_level || 0}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <Clock className="h-6 w-6 mx-auto mb-2 text-purple-500" />
+                    <p className="text-xs text-muted-foreground">Days Left</p>
+                    <p className="text-2xl font-bold">{selectedAlert.stock_info?.days_remaining || 0}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <Pill className="h-6 w-6 mx-auto mb-2 text-green-500" />
+                    <p className="text-xs text-muted-foreground">Daily Use</p>
+                    <p className="text-2xl font-bold">{selectedAlert.stock_info?.daily_consumption?.toFixed(1) || 0}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Status & Recommendation */}
+              <div className={cn(
+                "p-4 rounded-lg border",
+                selectedAlert.alert_info?.status === 'critical' && "bg-red-50 dark:bg-red-950/30 border-red-200",
+                selectedAlert.alert_info?.status === 'low' && "bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200",
+                selectedAlert.alert_info?.status === 'safe' && "bg-green-50 dark:bg-green-950/30 border-green-200"
+              )}>
+                <div className="flex items-start gap-3">
+                  {selectedAlert.alert_info?.status === 'critical' && <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />}
+                  {selectedAlert.alert_info?.status === 'low' && <Bell className="h-5 w-5 text-yellow-500 mt-0.5" />}
+                  {selectedAlert.alert_info?.status === 'safe' && <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />}
+                  <div>
+                    <h4 className="font-semibold capitalize">{selectedAlert.alert_info?.status || 'Unknown'} Status</h4>
+                    <p className="text-sm mt-1">{selectedAlert.alert_info?.recommendation || 'No recommendation available.'}</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Predicted refill date: {selectedAlert.alert_info?.predicted_refill_date 
+                        ? new Date(selectedAlert.alert_info.predicted_refill_date).toLocaleDateString() 
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>
+                  <X className="h-4 w-4 mr-2" />
+                  Close
+                </Button>
+                <Button 
+                  disabled={selectedAlert.alert_info?.notification_sent}
+                  onClick={() => {
+                    handleNotify(selectedAlert.id)
+                    setDetailDialogOpen(false)
+                  }}
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  {selectedAlert.alert_info?.notification_sent ? 'Already Notified' : 'Send Notification'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground">
+              No alert data available
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

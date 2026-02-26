@@ -9,7 +9,7 @@ interface UseVoiceInputOptions {
 }
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
-  const { language = 'en-US', onTranscript, onError } = options;
+  const { language = 'en-IN', onTranscript, onError } = options;
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
