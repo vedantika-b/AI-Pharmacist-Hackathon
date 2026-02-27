@@ -18,6 +18,8 @@ import { Search, Filter, ShoppingCart, Pill, Info, Loader2 } from "lucide-react"
 import { getProducts } from "@/lib/api"
 import { debounce } from "@/lib/utils"
 import type { Medicine } from "@/lib/types"
+import { useLanguage } from "@/contexts/LanguageContext"
+import { t } from "@/lib/translations"
 
 const container = {
   hidden: { opacity: 0 },
@@ -35,12 +37,13 @@ const item = {
 }
 
 export default function MedicinesPage() {
+  const { language } = useLanguage()
   const [medicines, setMedicines] = useState<Medicine[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("All")
+  const [selectedCategory, setSelectedCategory] = useState(t('all', language))
   const [cart, setCart] = useState<string[]>([])
-  const [categories, setCategories] = useState<string[]>(["All"])
+  const [categories, setCategories] = useState<string[]>([t('all', language)])
 
   // Fetch medicines
   useEffect(() => {
@@ -52,13 +55,14 @@ export default function MedicinesPage() {
       setLoading(true)
       const params: any = {}
       if (search) params.search = search
-      if (category && category !== "All") params.category = category
+      const allText = t('all', language)
+      if (category && category !== allText) params.category = category
       
       const data = await getProducts(params) as any
       setMedicines(data)
       
       // Extract unique categories
-      const uniqueCategories = ["All", ...new Set(data.map((m: Medicine) => m.category).filter(Boolean))]
+      const uniqueCategories = [allText, ...new Set(data.map((m: Medicine) => m.category).filter(Boolean))]
       setCategories(uniqueCategories as string[])
     } catch (error) {
       console.error('Failed to fetch medicines:', error)
@@ -69,7 +73,8 @@ export default function MedicinesPage() {
 
   // Debounced search
   const handleSearch = debounce((query: string) => {
-    fetchMedicines(query, selectedCategory !== "All" ? selectedCategory : undefined)
+    const allText = t('all', language)
+    fetchMedicines(query, selectedCategory !== allText ? selectedCategory : undefined)
   }, 500)
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,7 +85,8 @@ export default function MedicinesPage() {
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category)
-    fetchMedicines(searchQuery || undefined, category !== "All" ? category : undefined)
+    const allText = t('all', language)
+    fetchMedicines(searchQuery || undefined, category !== allText ? category : undefined)
   }
 
   const addToCart = (medicineId: string) => {
@@ -101,9 +107,9 @@ export default function MedicinesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-4xl font-bold mb-2">Medicine Search</h1>
+        <h1 className="text-4xl font-bold mb-2">{t('medicineSearch', language)}</h1>
         <p className="text-muted-foreground">
-          Search and browse our comprehensive database of medications
+          {t('searchDatabaseDesc', language)}
         </p>
       </div>
 
@@ -114,7 +120,7 @@ export default function MedicinesPage() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
-                placeholder="Search by medicine name or generic name..."
+                placeholder={t('searchByNamePlaceholder', language)}
                 value={searchQuery}
                 onChange={handleSearchChange}
                 className="pl-10 h-12"
@@ -129,7 +135,7 @@ export default function MedicinesPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Category</DropdownMenuLabel>
+                <DropdownMenuLabel>{t('category', language)}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {categories.map((category) => (
                   <DropdownMenuItem
@@ -144,7 +150,7 @@ export default function MedicinesPage() {
 
             <Button variant="outline" className="h-12 w-full md:w-auto">
               <ShoppingCart className="mr-2 h-5 w-5" />
-              Cart ({cart.length})
+              {t('cart', language)} ({cart.length})
             </Button>
           </div>
         </CardContent>
@@ -154,7 +160,7 @@ export default function MedicinesPage() {
       {loading && (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2 text-muted-foreg round">Loading medicines...</span>
+          <span className="ml-2 text-muted-foreg round">{t('loadingMedicines', language)}</span>
         </div>
       )}
 
@@ -162,7 +168,7 @@ export default function MedicinesPage() {
       {!loading && medicines.length > 0 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Found {medicines.length} medicine{medicines.length !== 1 ? "s" : ""}
+            {t('foundMedicines', language)} {medicines.length} {t('medicine', language)}{medicines.length !== 1 ? "s" : ""}
           </p>
         </div>
       )}
@@ -184,7 +190,7 @@ export default function MedicinesPage() {
                       <Pill className="h-6 w-6 text-white" />
                     </div>
                     <Badge variant={medicine.stock_quantity > 0 ? "default" : "destructive"}>
-                      {medicine.stock_quantity > 0 ? "In Stock" : "Out of Stock"}
+                      {medicine.stock_quantity > 0 ? t('inStock', language) : t('outOfStock', language)}
                     </Badge>
                   </div>
                   <CardTitle className="text-lg">{medicine.name}</CardTitle>
@@ -196,19 +202,19 @@ export default function MedicinesPage() {
                   <div className="space-y-2 mb-4">
                     {medicine.category && (
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Category:</span>
+                        <span className="text-muted-foreground">{t('category', language)}:</span>
                         <Badge variant="outline">{medicine.category}</Badge>
                       </div>
                     )}
                     {medicine.strength && (
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Strength:</span>
+                        <span className="text-muted-foreground">{t('strength', language)}:</span>
                         <span className="font-medium">{medicine.strength}</span>
                       </div>
                     )}
                     {medicine.prescription_required && (
                       <Badge variant="secondary" className="text-xs">
-                        Prescription Required
+                        {t('prescriptionRequired', language)}
                       </Badge>
                     )}
                     {medicine.description && (
@@ -226,7 +232,7 @@ export default function MedicinesPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        title="More information"
+                        title={t('moreInformation', language)}
                       >
                         <Info className="h-4 w-4" />
                       </Button>
@@ -237,11 +243,11 @@ export default function MedicinesPage() {
                       className="w-full"
                     >
                       {cart.includes(medicine.id) ? (
-                        "Added to Cart ✓"
+                        t('addedToCart', language)
                       ) : (
                         <>
                           <ShoppingCart className="mr-2 h-4 w-4" />
-                          Add to Cart
+                          {t('addToCart', language)}
                         </>
                       )}
                     </Button>
@@ -258,9 +264,9 @@ export default function MedicinesPage() {
         <Card className="p-12">
           <div className="text-center space-y-2">
             <Pill className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-2xl font-semibold">No medicines found</p>
+            <p className="text-2xl font-semibold">{t('noMedicinesFound', language)}</p>
             <p className="text-muted-foreground">
-              Try adjusting your search or filter criteria
+              {t('tryAdjustingFilter', language)}
             </p>
           </div>
         </Card>

@@ -101,6 +101,38 @@ export default function DashboardPage() {
     return colorMap[color] || colorMap.blue
   }
 
+  const translateInsightCategory = (category: string): string => {
+    const categoryMap: Record<string, string> = {
+      'Stock Alert': t('stockAlert', language),
+      'Refill Predictions': t('refillPredictions', language),
+      'High Demand': t('highDemand', language),
+    }
+    return categoryMap[category] || category
+  }
+
+  const translateInsightMessage = (message: string): string => {
+    // Try to translate common insight message patterns
+    if (message.includes('medicines running low')) {
+      const match = message.match(/(\d+)\s+medicines running low/)
+      if (match) {
+        return `${match[1]} ${t('medicinesRunningLow', language)}`
+      }
+    }
+    if (message.includes('patients need refills')) {
+      const match = message.match(/(\d+)\s+patients need refills/)
+      if (match) {
+        return `${match[1]} ${t('patientsNeedRefills', language)}`
+      }
+    }
+    if (message.includes('showing') && message.includes('increase')) {
+      const match = message.match(/(\w+)\s+showing\s+(\d+)%\s+increase/)
+      if (match) {
+        return `${match[1]} ${t('showingIncrease', language)}`
+      }
+    }
+    return message
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-200px)]">
@@ -202,7 +234,7 @@ export default function DashboardPage() {
                           order.status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
                           'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                         }`}>
-                          {order.status}
+                          {t(order.status as any, language) || order.status}
                         </span>
                       </p>
                     </div>
@@ -251,10 +283,10 @@ export default function DashboardPage() {
                       {insight.type === 'warning' && <Bell className="h-5 w-5 mt-0.5 text-yellow-500 flex-shrink-0" />}
                       <div className="flex-1">
                         <p className="text-sm font-semibold mb-1">
-                          {insight.category}
+                          {translateInsightCategory(insight.category)}
                         </p>
                         <p className="text-xs opacity-90 leading-relaxed">
-                          {insight.message}
+                          {translateInsightMessage(insight.message)}
                         </p>
                       </div>
                     </div>

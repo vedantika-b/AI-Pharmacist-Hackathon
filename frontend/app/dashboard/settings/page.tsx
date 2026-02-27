@@ -16,6 +16,8 @@ import {
   getHealthProfile,
   updateHealthProfile
 } from "@/lib/api"
+import { useLanguage } from "@/contexts/LanguageContext"
+import { t } from "@/lib/translations"
 
 interface UserProfile {
   full_name?: string
@@ -38,6 +40,7 @@ interface HealthProfile {
 }
 
 export default function SettingsPage() {
+  const { language } = useLanguage()
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -169,7 +172,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-muted-foreground">Loading settings...</p>
+        <p className="text-muted-foreground">{t('loadingSettings', language)}</p>
       </div>
     )
   }
@@ -177,9 +180,9 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-4xl font-bold mb-2">Settings</h1>
+        <h1 className="text-4xl font-bold mb-2">{t('settingsTitle', language)}</h1>
         <p className="text-muted-foreground">
-          Manage your account settings and preferences
+          {t('manageAccountSettings', language)}
         </p>
       </div>
 
@@ -201,13 +204,13 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <User className="h-5 w-5" />
-              <CardTitle>Profile Information</CardTitle>
+              <CardTitle>{t('profileInformation', language)}</CardTitle>
             </div>
-            <CardDescription>Update your personal information</CardDescription>
+            <CardDescription>{t('updatePersonalInfo', language)}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name">{t('fullName', language)}</Label>
               <Input 
                 id="name" 
                 value={profile.full_name || ""} 
@@ -215,7 +218,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('email', language)}</Label>
               <Input 
                 id="email" 
                 type="email" 
@@ -225,7 +228,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
+              <Label htmlFor="phone">{t('phone', language)}</Label>
               <Input 
                 id="phone" 
                 type="tel" 
@@ -234,7 +237,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dob">Date of Birth</Label>
+              <Label htmlFor="dob">{t('dateOfBirth', language)}</Label>
               <Input 
                 id="dob" 
                 type="date" 
@@ -243,7 +246,7 @@ export default function SettingsPage() {
               />
             </div>
             <Button onClick={handleProfileSave} disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? t('saving', language) : t('saveChanges', language)}
             </Button>
           </CardContent>
         </Card>
@@ -253,13 +256,13 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              <CardTitle>Health Profile</CardTitle>
+              <CardTitle>{t('healthProfile', language)}</CardTitle>
             </div>
-            <CardDescription>Manage your allergies and medical conditions</CardDescription>
+            <CardDescription>{t('manageAllergiesMedical', language)}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="allergies">Allergies (comma-separated)</Label>
+              <Label htmlFor="allergies">{t('allergies', language)}</Label>
               <Input 
                 id="allergies" 
                 value={healthProfile.allergies?.join(", ") || ""} 
@@ -271,7 +274,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="conditions">Chronic Conditions (comma-separated)</Label>
+              <Label htmlFor="conditions">{t('chronicConditions', language)}</Label>
               <Input 
                 id="conditions" 
                 value={healthProfile.chronic_conditions?.join(", ") || ""} 
@@ -283,7 +286,7 @@ export default function SettingsPage() {
               />
             </div>
             <Button onClick={handleHealthProfileSave} disabled={saving}>
-              {saving ? "Saving..." : "Save Health Profile"}
+              {saving ? t('saving', language) : t('saveHealthProfile', language)}
             </Button>
           </CardContent>
         </Card>
@@ -293,15 +296,15 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Bell className="h-5 w-5" />
-              <CardTitle>Notifications</CardTitle>
+              <CardTitle>{t('notificationsTitle', language)}</CardTitle>
             </div>
-            <CardDescription>Configure your notification preferences</CardDescription>
+            <CardDescription>{t('configureNotificationPrefs', language)}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Refill Alerts</p>
-                <p className="text-sm text-muted-foreground">Receive alerts for medication refills</p>
+                <p className="font-medium">{t('refillAlertsNotif', language)}</p>
+                <p className="text-sm text-muted-foreground">{t('refillAlertsDesc', language)}</p>
               </div>
               <input 
                 type="checkbox" 
@@ -313,8 +316,8 @@ export default function SettingsPage() {
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Low Stock Alerts</p>
-                <p className="text-sm text-muted-foreground">Get notified about low stock items</p>
+                <p className="font-medium">{t('lowStockAlertsNotif', language)}</p>
+                <p className="text-sm text-muted-foreground">{t('lowStockAlertsDesc', language)}</p>
               </div>
               <input 
                 type="checkbox" 
@@ -326,8 +329,8 @@ export default function SettingsPage() {
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Email Notifications</p>
-                <p className="text-sm text-muted-foreground">Get updates via email</p>
+                <p className="font-medium">{t('emailNotifications', language)}</p>
+                <p className="text-sm text-muted-foreground">{t('emailNotificationsDesc', language)}</p>
               </div>
               <input 
                 type="checkbox" 
@@ -339,8 +342,8 @@ export default function SettingsPage() {
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Controlled Substance Warnings</p>
-                <p className="text-sm text-muted-foreground">Receive warnings for controlled substances</p>
+                <p className="font-medium">{t('controlledSubstanceWarnings', language)}</p>
+                <p className="text-sm text-muted-foreground">{t('controlledSubstanceWarningsDesc', language)}</p>
               </div>
               <input 
                 type="checkbox" 
@@ -357,13 +360,13 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              <CardTitle>Privacy & Security</CardTitle>
+              <CardTitle>{t('privacySecurity', language)}</CardTitle>
             </div>
-            <CardDescription>Manage your security settings</CardDescription>
+            <CardDescription>{t('manageSecuritySettings', language)}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button variant="outline" disabled>Change Password</Button>
-            <Button variant="outline" disabled>Two-Factor Authentication</Button>
+            <Button variant="outline" disabled>{t('changePassword', language)}</Button>
+            <Button variant="outline" disabled>{t('twoFactorAuth', language)}</Button>
           </CardContent>
         </Card>
       </div>

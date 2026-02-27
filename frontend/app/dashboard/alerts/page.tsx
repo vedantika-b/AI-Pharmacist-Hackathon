@@ -9,14 +9,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Bell, AlertTriangle, CheckCircle, Clock, Pill, Calendar, Loader2, Package, TrendingDown, Info, Send, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getRefillPredictions, getAlertDetail, sendAlertNotification } from "@/lib/api"
+import { useLanguage } from "@/contexts/LanguageContext"
+import { t } from "@/lib/translations"
 
-const statusConfig = {
+const getStatusConfig = (lang: string) => ({
   critical: {
     color: "from-red-500 to-orange-500",
     bgColor: "bg-red-50 dark:bg-red-950/30",
     textColor: "text-red-700 dark:text-red-300",
     icon: AlertTriangle,
-    label: "Critical",
+    label: t('critical', lang as any),
     variant: "destructive" as const
   },
   low: {
@@ -24,7 +26,7 @@ const statusConfig = {
     bgColor: "bg-yellow-50 dark:bg-yellow-950/30",
     textColor: "text-yellow-700 dark:text-yellow-300",
     icon: Bell,
-    label: "Low",
+    label: t('low', lang as any),
     variant: "secondary" as const
   },
   safe: {
@@ -32,10 +34,10 @@ const statusConfig = {
     bgColor: "bg-green-50 dark:bg-green-950/30",
     textColor: "text-green-700 dark:text-green-300",
     icon: CheckCircle,
-    label: "Safe",
+    label: t('safe', lang as any),
     variant: "outline" as const
   }
-}
+})
 
 const container = {
   hidden: { opacity: 0 },
@@ -53,6 +55,7 @@ const item = {
 }
 
 export default function AlertsPage() {
+  const { language } = useLanguage()
   const [alerts, setAlerts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string | null>(null)
@@ -61,6 +64,7 @@ export default function AlertsPage() {
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [notifyingId, setNotifyingId] = useState<string | null>(null)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
+  const statusConfig = getStatusConfig(language)
 
   // Auto-hide notification after 3 seconds
   useEffect(() => {
@@ -81,7 +85,7 @@ export default function AlertsPage() {
       setAlerts(data)
     } catch (error) {
       console.error('Failed to fetch alerts:', error)
-      setNotification({ type: 'error', message: 'Failed to load alerts' })
+      setNotification({ type: 'error', message: t('alertsLoadError', language) })
     } finally {
       setLoading(false)
     }
@@ -129,14 +133,14 @@ export default function AlertsPage() {
     try {
       setNotifyingId(alertId)
       await sendAlertNotification(alertId, 'email')
-      setNotification({ type: 'success', message: 'Notification sent successfully!' })
+      setNotification({ type: 'success', message: t('notificationSentSuccess', language) })
       // Update local state to reflect notification sent
       setAlerts(prev => prev.map(a => 
         a.id === alertId ? { ...a, notification_sent: true } : a
       ))
     } catch (error) {
       console.error('Failed to send notification:', error)
-      setNotification({ type: 'error', message: 'Failed to send notification' })
+      setNotification({ type: 'error', message: t('notificationSentError', language) })
     } finally {
       setNotifyingId(null)
     }
@@ -182,9 +186,9 @@ export default function AlertsPage() {
       )}
 
       <div>
-        <h1 className="text-4xl font-bold mb-2">Refill Alerts</h1>
+        <h1 className="text-4xl font-bold mb-2">{t('refillAlerts', language)}</h1>
         <p className="text-muted-foreground">
-          Monitor medication refill status and send timely reminders to patients
+          {t('monitorRefillStatus', language)}
         </p>
       </div>
 
@@ -193,7 +197,7 @@ export default function AlertsPage() {
         <Card className="border-red-200 dark:border-red-900">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription>Critical</CardDescription>
+              <CardDescription>{t('critical', language)}</CardDescription>
               <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center">
                 <AlertTriangle className="h-5 w-5 text-white" />
               </div>
@@ -201,7 +205,7 @@ export default function AlertsPage() {
             <CardTitle className="text-3xl">{criticalCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">Requires immediate attention</p>
+            <p className="text-sm text-muted-foreground">{t('requiresImmediateAttention', language)}</p>
             {criticalCount > 0 && (
               <Button 
                 variant="outline" 
@@ -209,7 +213,7 @@ export default function AlertsPage() {
                 className="mt-2 w-full"
                 onClick={() => setFilter(filter === 'critical' ? null : 'critical')}
               >
-                {filter === 'critical' ? 'Show All' : 'Show Critical Only'}
+                {filter === 'critical' ? t('showAll', language) : t('showCriticalOnly', language)}
               </Button>
             )}
           </CardContent>
@@ -218,7 +222,7 @@ export default function AlertsPage() {
         <Card className="border-yellow-200 dark:border-yellow-900">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription>Low</CardDescription>
+              <CardDescription>{t('low', language)}</CardDescription>
               <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center">
                 <Bell className="h-5 w-5 text-white" />
               </div>
@@ -226,7 +230,7 @@ export default function AlertsPage() {
             <CardTitle className="text-3xl">{lowCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">Monitor closely</p>
+            <p className="text-sm text-muted-foreground">{t('monitorClosely', language)}</p>
             {lowCount > 0 && (
               <Button 
                 variant="outline" 
@@ -234,7 +238,7 @@ export default function AlertsPage() {
                 className="mt-2 w-full"
                 onClick={() => setFilter(filter === 'low' ? null : 'low')}
               >
-                {filter === 'low' ? 'Show All' : 'Show Low Only'}
+                {filter === 'low' ? t('showAll', language) : t('showLowOnly', language)}
               </Button>
             )}
           </CardContent>
@@ -243,7 +247,7 @@ export default function AlertsPage() {
         <Card className="border-green-200 dark:border-green-900">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardDescription>Safe</CardDescription>
+              <CardDescription>{t('safe', language)}</CardDescription>
               <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
                 <CheckCircle className="h-5 w-5 text-white" />
               </div>
@@ -251,7 +255,7 @@ export default function AlertsPage() {
             <CardTitle className="text-3xl">{safeCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">Well stocked</p>
+            <p className="text-sm text-muted-foreground">{t('wellStocked', language)}</p>
           </CardContent>
         </Card>
       </div>
@@ -260,7 +264,7 @@ export default function AlertsPage() {
       {loading && (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2 text-muted-foreground">Loading alerts...</span>
+          <span className="ml-2 text-muted-foreground">{t('loadingAlerts', language)}</span>
         </div>
       )}
 
@@ -269,9 +273,9 @@ export default function AlertsPage() {
         <Card>
           <CardContent className="py-20 text-center">
             <Bell className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No alerts found</h3>
+            <h3 className="text-lg font-semibold mb-2">{t('noAlertsFound', language)}</h3>
             <p className="text-muted-foreground">
-              {filter ? 'No alerts in this category' : 'All prescriptions are up to date'}
+              {filter ? t('noAlertsInCategory', language) : t('allPrescriptionsUpToDate', language)}
             </p>
             {filter && (
               <Button 
@@ -279,7 +283,7 @@ export default function AlertsPage() {
                 onClick={() => setFilter(null)}
                 className="mt-4"
               >
-                Clear Filter
+                {t('clearFilter', language)}
               </Button>
             )}
           </CardContent>
@@ -314,9 +318,9 @@ export default function AlertsPage() {
                         <div className="flex-1 space-y-2">
                           <div className="flex items-start justify-between gap-4">
                             <div>
-                              <h3 className="font-semibold text-lg">{alert.medicine_name || 'Unknown Medicine'}</h3>
+                              <h3 className="font-semibold text-lg">{alert.medicine_name || t('unknownMedicine', language)}</h3>
                               <p className="text-sm text-muted-foreground">
-                                Refill predicted for {new Date(alert.predicted_refill_date).toLocaleDateString()}
+                                {t('refillPredictedFor', language)} {new Date(alert.predicted_refill_date).toLocaleDateString()}
                               </p>
                             </div>
                             <Badge variant={config.variant} className="shrink-0">
@@ -327,7 +331,7 @@ export default function AlertsPage() {
 
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
                             <div>
-                              <p className="text-xs text-muted-foreground mb-1">Days Remaining</p>
+                              <p className="text-xs text-muted-foreground mb-1">{t('daysRemaining', language)}</p>
                               <div className="flex items-center gap-2">
                                 <Clock className="h-4 w-4 text-muted-foreground" />
                                 <span className={cn(
@@ -336,13 +340,13 @@ export default function AlertsPage() {
                                   alert.days_remaining <= 14 ? "text-yellow-600 dark:text-yellow-400" :
                                   "text-green-600 dark:text-green-400"
                                 )}>
-                                  {alert.days_remaining} days
+                                  {alert.days_remaining} {t('days', language)}
                                 </span>
                               </div>
                             </div>
 
                             <div>
-                              <p className="text-xs text-muted-foreground mb-1">Confidence</p>
+                              <p className="text-xs text-muted-foreground mb-1">{t('confidence', language)}</p>
                               <p className="font-medium">
                                 {alert.confidence_score 
                                   ? `${Math.round(alert.confidence_score * 100)}%`
@@ -351,7 +355,7 @@ export default function AlertsPage() {
                             </div>
 
                             <div>
-                              <p className="text-xs text-muted-foreground mb-1">Last Order</p>
+                              <p className="text-xs text-muted-foreground mb-1">{t('lastOrder', language)}</p>
                               <div className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3 text-muted-foreground" />
                                 <p className="text-sm font-medium">
@@ -370,7 +374,7 @@ export default function AlertsPage() {
                                 onClick={() => handleViewAlert(alert)}
                               >
                                 <Info className="h-3 w-3 mr-1" />
-                                View
+                                {t('view', language)}
                               </Button>
                               <Button 
                                 size="sm" 
@@ -383,7 +387,7 @@ export default function AlertsPage() {
                                 ) : (
                                   <Send className="h-3 w-3 mr-1" />
                                 )}
-                                {alert.notification_sent ? 'Notified' : 'Notify'}
+                                {alert.notification_sent ? t('notified', language) : t('notify', language)}
                               </Button>
                             </div>
                           </div>
