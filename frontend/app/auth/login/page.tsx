@@ -5,11 +5,18 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Pill, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react"
+import { Pill, Eye, EyeOff, AlertCircle, Loader2, Sparkles } from "lucide-react"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+
+// Demo credentials for easy login
+const DEMO_CREDENTIALS = {
+  name: "Vedantika Bhoyar",
+  email: "vedantikabhoyar135@gmail.com",
+  password: "admin123"
+}
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -17,6 +24,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const { signIn, user, loading } = useAuth()
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
 
   // Redirect if already logged in
   useEffect(() => {
@@ -39,6 +48,23 @@ export default function LoginPage() {
       router.push("/dashboard")
     } catch (err: any) {
       setError(err.message || 'Failed to sign in. Please check your credentials.')
+      setIsLoading(false)
+    }
+  }
+
+  const fillDemoCredentials = () => {
+    if (emailRef.current) emailRef.current.value = DEMO_CREDENTIALS.email
+    if (passwordRef.current) passwordRef.current.value = DEMO_CREDENTIALS.password
+  }
+
+  const handleDemoLogin = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      await signIn(DEMO_CREDENTIALS.email, DEMO_CREDENTIALS.password)
+      router.push("/dashboard")
+    } catch (err: any) {
+      setError(err.message || 'Demo login failed. Please ensure the demo account exists.')
       setIsLoading(false)
     }
   }
@@ -84,6 +110,7 @@ export default function LoginPage() {
                   placeholder="you@example.com"
                   required
                   autoComplete="email"
+                  ref={emailRef}
                 />
               </div>
               <div className="space-y-2">
@@ -96,6 +123,7 @@ export default function LoginPage() {
                     placeholder="••••••••"
                     required
                     autoComplete="current-password"
+                    ref={passwordRef}
                   />
                   <Button
                     type="button"
@@ -137,6 +165,32 @@ export default function LoginPage() {
               >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
+              
+              {/* Demo Login Section */}
+              <div className="w-full space-y-2">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or try demo</span>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-dashed border-purple-300 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                  onClick={handleDemoLogin}
+                  disabled={isLoading}
+                >
+                  <Sparkles className="h-4 w-4 mr-2 text-purple-500" />
+                  Demo Login (Vedantika Bhoyar)
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  Email: vedantikabhoyar135@gmail.com | Password: admin123
+                </p>
+              </div>
+              
               <p className="text-sm text-center text-muted-foreground">
                 Don't have an account?{" "}
                 <Link href="/auth/signup" className="text-primary hover:underline font-medium">
