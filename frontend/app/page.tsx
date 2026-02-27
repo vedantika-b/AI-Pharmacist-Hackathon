@@ -199,12 +199,7 @@ export default function LandingPage() {
               transition={{ delay: 0.4 }}
               className="text-xl md:text-2xl text-muted-foreground max-w-4xl mx-auto leading-relaxed"
             >
-              {language === 'hi' ? 
-                "स्मार्ट दवा प्रबंधन, एआई-संचालित स्वास्थ्य अंतर्दृष्टि, आवाज़ सहायता और व्यक्तिगत देखभाल के लिए आपका बुद्धिमान स्वास्थ्य साथी।" :
-               language === 'mr' ? 
-                "स्मार्ट औषध व्यवस्थापन, एआय-चालित आरोग्य अंतर्दृष्टी, आवाज सहाय्य आणि वैयक्तिक काळजीसाठी तुमचा बुद्धिमान आरोग्य साथी।" :
-                "Your intelligent healthcare companion for smart medication management, AI-powered health insights, voice assistance, and personalized care in multiple languages."
-              }
+              {t('landingHeroSubtitle', language)}
             </motion.p>
 
             <motion.div
@@ -215,14 +210,14 @@ export default function LandingPage() {
             >
               <Link href="/dashboard">
                 <Button size="lg" className="text-lg px-8 h-14 group bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
-                  {language === 'hi' ? "शुरू करें" : language === 'mr' ? "सुरू करा" : "Get Started"}
+                  {t('getStartedBtn', language)}
                   <Sparkles className="ml-2 h-5 w-5 group-hover:animate-pulse" />
                 </Button>
               </Link>
               <Link href="/dashboard/chat">
                 <Button size="lg" variant="outline" className="text-lg px-8 h-14 group border-2">
                   <Mic className="mr-2 h-5 w-5 group-hover:animate-pulse" />
-                  {language === 'hi' ? "एआई चैट" : language === 'mr' ? "एआय चॅट" : "AI Chat"}
+                  {t('aiChatBtn', language)}
                 </Button>
               </Link>
             </motion.div>
@@ -235,15 +230,15 @@ export default function LandingPage() {
             >
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-green-500" />
-                <span>{language === 'hi' ? "सुरक्षित और निजी" : language === 'mr' ? "सुरक्षित आणि खाजगी" : "Secure & Private"}</span>
+                <span>{t('securePrivate', language)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Globe className="h-4 w-4 text-blue-500" />
-                <span>{language === 'hi' ? "बहुभाषी समर्थन" : language === 'mr' ? "बहुभाषिक समर्थन" : "Multilingual Support"}</span>
+                <span>{t('multilingualSupport', language)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Mic className="h-4 w-4 text-purple-500" />
-                <span>{language === 'hi' ? "आवाज़ सक्षम" : language === 'mr' ? "आवाज सक्षम" : "Voice Enabled"}</span>
+                <span>{t('voiceEnabled', language)}</span>
               </div>
             </motion.div>
           </motion.div>

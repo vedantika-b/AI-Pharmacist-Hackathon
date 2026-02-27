@@ -33,18 +33,9 @@ interface Message {
   }
 }
 
-const initialMessages: Message[] = [
-  {
-    id: "1",
-    type: "ai",
-    content: "Hello! I'm your AI Pharmacist assistant. How can I help you today?\n\nYou can:\n• Ask about medications, dosages, or drug interactions\n• **Upload a prescription image** using the 📷 button to get it analyzed\n• Order refills or check medicine availability\n• Use voice input by clicking the microphone",
-    timestamp: new Date()
-  }
-]
-
 export default function ChatPage() {
   const { language } = useLanguage()
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isTyping, setIsTyping] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
@@ -54,6 +45,16 @@ export default function ChatPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Initialize messages with translated welcome message
+  useEffect(() => {
+    setMessages([{
+      id: "1",
+      type: "ai",
+      content: t('aiWelcomeMessage', language),
+      timestamp: new Date()
+    }])
+  }, [language])
 
   // Voice hooks
   const { isListening, startListening, stopListening } = useVoiceInput({
@@ -91,13 +92,13 @@ export default function ChatPage() {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file')
+        alert(t('pleaseSelectImage', language))
         return
       }
       
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB')
+        alert(t('imageSizeTooLarge', language))
         return
       }
       

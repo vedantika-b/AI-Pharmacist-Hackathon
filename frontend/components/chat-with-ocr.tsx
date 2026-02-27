@@ -41,7 +41,7 @@ export default function ChatWithOCR() {
     if (file) {
       // Validate file type
       if (!file.type.startsWith("image/")) {
-        setError("Please select an image file")
+        setError(t('pleaseSelectImage', language))
         return
       }
 
@@ -160,10 +160,10 @@ export default function ChatWithOCR() {
       <Card className="h-[600px] flex flex-col">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            💊 AI Chat with OCR
+            💊 {t('aiChatWithOCR', language)}
           </CardTitle>
           <CardDescription>
-            Ask about medications or upload a prescription image for instant analysis
+            {t('askOrUpload', language)}
           </CardDescription>
         </CardHeader>
 
@@ -175,7 +175,7 @@ export default function ChatWithOCR() {
                 <div className="space-y-2">
                   <ImageIcon className="h-12 w-12 text-muted-foreground mx-auto opacity-50" />
                   <p className="text-muted-foreground">
-                    Start by uploading a prescription or typing your question
+                    {t('startByUploading', language)}
                   </p>
                 </div>
               </div>
@@ -272,7 +272,7 @@ export default function ChatWithOCR() {
                 disabled={loading}
               >
                 <Upload className="h-4 w-4 mr-2" />
-                Upload Prescription
+                {t('uploadPrescriptionBtn', language)}
               </Button>
             </div>
 
@@ -281,13 +281,7 @@ export default function ChatWithOCR() {
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={
-                  language === "hi"
-                    ? "अपना प्रश्न लिखें..."
-                    : language === "mr"
-                      ? "आपला प्रश्न लिहा..."
-                      : "Ask about your medications..."
-                }
+                placeholder={t('askAboutMedications', language)}
                 className="min-h-12 resize-none flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={loading}
               />

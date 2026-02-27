@@ -22,7 +22,7 @@ export default function OCRDemoPage() {
     if (!file) return
 
     if (!file.type.startsWith("image/")) {
-      setError("Please select an image file")
+      setError(t('pleaseSelectImage', language) || "Please select an image file")
       return
     }
 
@@ -149,24 +149,24 @@ export default function OCRDemoPage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold mb-2">📋 Prescription OCR</h1>
+        <h1 className="text-3xl font-bold mb-2">📋 {t('prescriptionOCR', language)}</h1>
         <p className="text-muted-foreground">
-          Upload a prescription image and our AI will extract medication details automatically
+          {t('uploadPrescriptionDesc', language)}
         </p>
       </div>
 
       {/* Upload Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Upload Prescription Image</CardTitle>
-          <CardDescription>Supports JPG, PNG, and PDF files</CardDescription>
+          <CardTitle>{t('uploadPrescriptionTitle', language)}</CardTitle>
+          <CardDescription>{t('supportsFiles', language)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="border-2 border-dashed rounded-lg p-8 text-center space-y-4 hover:bg-muted/50 transition">
             <Upload className="h-12 w-12 mx-auto text-muted-foreground" />
             <div>
-              <p className="font-medium mb-2">Drop your prescription here</p>
-              <p className="text-sm text-muted-foreground mb-4">or</p>
+              <p className="font-medium mb-2">{t('dropPrescriptionHere', language)}</p>
+              <p className="text-sm text-muted-foreground mb-4">{t('or', language)}</p>
               <label>
                 <input
                   type="file"
@@ -175,7 +175,7 @@ export default function OCRDemoPage() {
                   className="hidden"
                 />
                 <Button variant="outline" asChild className="cursor-pointer">
-                  <span>Select File</span>
+                  <span>{t('selectFile', language)}</span>
                 </Button>
               </label>
             </div>
@@ -195,12 +195,12 @@ export default function OCRDemoPage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Processing...
+                    {t('processing', language)}
                   </>
                 ) : (
                   <>
                     <Upload className="h-4 w-4" />
-                    Process
+                    {t('process', language)}
                   </>
                 )}
               </Button>
@@ -223,7 +223,7 @@ export default function OCRDemoPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Analysis Results</CardTitle>
+                <CardTitle>{t('analysisResults', language)}</CardTitle>
                 <Badge
                   variant={
                     result.status === "success"
@@ -244,7 +244,7 @@ export default function OCRDemoPage() {
               {/* Confidence */}
               <div>
                 <p className="text-sm font-medium mb-2">
-                  OCR Confidence: {(result.confidence * 100).toFixed(1)}%
+                  {t('ocrConfidence', language)}: {(result.confidence * 100).toFixed(1)}%
                 </p>
                 <div className="w-full bg-muted rounded-full h-2">
                   <div
@@ -258,27 +258,27 @@ export default function OCRDemoPage() {
               {result.metadata && (
                 <div className="grid grid-cols-2 gap-4 p-3 bg-muted rounded-lg">
                   <div>
-                    <p className="text-xs text-muted-foreground">Image Quality</p>
+                    <p className="text-xs text-muted-foreground">{t('imageQuality', language)}</p>
                     <p className="font-medium capitalize">
                       {result.metadata.image_quality}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Date</p>
+                    <p className="text-xs text-muted-foreground">{t('date', language)}</p>
                     <p className="font-medium">
                       {result.metadata.prescription_date || "N/A"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Doctor</p>
+                    <p className="text-xs text-muted-foreground">{t('doctor', language)}</p>
                     <p className="font-medium">
                       {result.metadata.doctor_name || "N/A"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Handwriting</p>
+                    <p className="text-xs text-muted-foreground">{t('handwriting', language)}</p>
                     <p className="font-medium">
-                      {result.metadata.has_handwriting ? "Yes" : "No"}
+                      {result.metadata.has_handwriting ? t('yes', language) : t('no', language)}
                     </p>
                   </div>
                 </div>
@@ -290,9 +290,9 @@ export default function OCRDemoPage() {
           {result.medications && result.medications.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Extracted Medications</CardTitle>
+                <CardTitle>{t('extractedMedications', language)}</CardTitle>
                 <CardDescription>
-                  Found {result.medications.length} medication(s)
+                  {t('found', language)} {result.medications.length} {t('medications', language)}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -307,16 +307,16 @@ export default function OCRDemoPage() {
                           </p>
                         </div>
                         <Badge variant="outline">
-                          {(med.confidence * 100).toFixed(0)}% match
+                          {(med.confidence * 100).toFixed(0)}% {t('match', language)}
                         </Badge>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
-                          <p className="text-muted-foreground">Frequency</p>
+                          <p className="text-muted-foreground">{t('frequency', language)}</p>
                           <p className="font-medium">{med.frequency || "N/A"}</p>
                         </div>
                         <div>
-                          <p className="text-muted-foreground">Duration</p>
+                          <p className="text-muted-foreground">{t('duration', language)}</p>
                           <p className="font-medium">{med.duration || "N/A"}</p>
                         </div>
                       </div>
@@ -331,7 +331,7 @@ export default function OCRDemoPage() {
           {result.extracted_text && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Raw Extracted Text</CardTitle>
+                <CardTitle className="text-base">{t('rawExtractedText', language)}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg max-h-32 overflow-auto">
@@ -346,10 +346,10 @@ export default function OCRDemoPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Database className="h-5 w-5" />
-                Save to Database
+                {t('saveToDatabase', language)}
               </CardTitle>
               <CardDescription>
-                Store this prescription scan for future reference
+                {t('storePrescription', language)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -362,17 +362,17 @@ export default function OCRDemoPage() {
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
+                    {t('saving', language)}
                   </>
                 ) : saveStatus?.success ? (
                   <>
                     <CheckCircle2 className="h-4 w-4" />
-                    Saved
+                    {t('saved', language)}
                   </>
                 ) : (
                   <>
                     <Save className="h-4 w-4" />
-                    Save Prescription
+                    {t('savePrescription', language)}
                   </>
                 )}
               </Button>

@@ -10,15 +10,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Moon, Sun, User, Settings, LogOut, Search } from "lucide-react"
-import { useTheme } from "next-themes"
+import { User, Settings, LogOut, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
 import { LanguageSelector } from "@/components/LanguageSelector"
 import { useAuth } from "@/contexts/AuthContext"
+import { ThemeToggle } from "@/components/ThemeToggle"
 
 export default function Navbar() {
-  const { theme, setTheme } = useTheme()
   const router = useRouter()
   const { user, signOut } = useAuth()
 
@@ -42,32 +41,25 @@ export default function Navbar() {
   }
 
   return (
-    <header className="h-16 border-b bg-card px-6 flex items-center justify-between">
+    <header className="h-16 border-b-2 border-border bg-white dark:bg-[#0F1A17] px-6 flex items-center justify-between shadow-sm">
       {/* Search */}
       <div className="flex-1 max-w-md">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search medicines, orders..."
-            className="pl-10"
+            className="pl-10 rounded-xl border-2 focus:border-primary transition-colors duration-300 bg-background/50"
           />
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {/* Language Selector */}
         <LanguageSelector />
 
         {/* Theme Toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        >
-          <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-        </Button>
+        <ThemeToggle />
 
         {/* Profile Dropdown */}
         <DropdownMenu>
