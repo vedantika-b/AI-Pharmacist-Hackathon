@@ -34,7 +34,7 @@ from core.config import get_settings
 from core.database import DatabasePool
 
 # Import routers
-from routers import orders, health, products, chat, predictions, export, dashboard, ai_logs, users, prescriptions, feedback, auth
+from routers import orders, health, products, chat, predictions, export, dashboard, ai_logs, users, prescriptions, feedback, auth, pharmacy_prices
 
 # Import middleware and exceptions
 from core.middleware import (
@@ -266,6 +266,10 @@ app.include_router(
 )
 app.include_router(
     feedback.router,
+    prefix=settings.api_v1_prefix
+)
+app.include_router(
+    pharmacy_prices.router,
     prefix=settings.api_v1_prefix
 )
 # Root endpoint
