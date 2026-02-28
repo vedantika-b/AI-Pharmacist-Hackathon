@@ -192,8 +192,19 @@ async def chat(
                     med_names = ", ".join([m["name"] for m in extracted_medications])
                     request.message = f"I uploaded a prescription with {med_names}. Can you help me order these?"
             else:
+                # OCR failed - try to generate a multilingual error response
+                try:
+                    ocr_error_response = await llm_service.generate_response(
+                        user_message=request.message if request.message else "Uploaded prescription image",
+                        intent="OCR_ERROR",
+                        medications=[]
+                    )
+                except:
+                    # Fallback if LLM fails
+                    ocr_error_response = "I couldn't read the prescription image clearly. Please try uploading a clearer image or tell me the medications directly."
+                
                 return ChatResponse(
-                    response="I couldn't read the prescription image clearly. Please try uploading a clearer image or tell me the medications directly.",
+                    response=ocr_error_response,
                     intent="OCR_ERROR",
                     confidence=0.0,
                     medications=[],
@@ -240,11 +251,20 @@ async def chat(
             )
         except Exception as e:
             logger.warning(f"LLM service error: {e}")
-            # Fallback response for LLM errors
-            response_text = f"Thank you for your message. I'm here to help with your medication needs."
+            # Fallback response for LLM errors - generate multilingual fallback
+            try:
+                response_text = await llm_service.generate_response(
+                    user_message=request.message,
+                    intent="FALLBACK",
+                    medications=extracted_medications if extracted_medications else []
+                )
+            except:
+                # Last resort fallback
+                response_text = "Thank you for your message. I'm here to help with your medication needs."
+            
             if extracted_medications:
-                med_names = ", ".join([m["name"] for m in extracted_medications])
-                response_text = f"I've identified {med_names} from your prescription. Would you like me to help you order these medications?"
+                # Keep the medications context even on error
+                pass
             
             return ChatResponse(
                 response=response_text,
@@ -266,23 +286,31 @@ async def chat(
             all_medications = extracted_medications
         
         if llm_output.intent.value == "ORDER_NEW":
-            med_names = ", ".join([m.name if hasattr(m, 'name') else m.get("name", "") for m in all_medications])
-            if med_names:
-                response_text = f"I understand you want to order {med_names}. "
-            else:
-                response_text = "I understand you want to order medicines. "
-            if llm_output.requires_prescription:
-                response_text += "Please note that prescription verification will be required. "
-            response_text += "Would you like me to proceed with creating your order?"
+            # Generate multilingual response
+            response_context = {
+                "requires_prescription": llm_output.requires_prescription,
+                "suggestions": ["Yes, create order", "Tell me more about these medicines", "Cancel"]
+            }
+            response_text = await llm_service.generate_response(
+                user_message=request.message,
+                intent="ORDER_NEW",
+                medications=all_medications,
+                context=response_context
+            )
             suggestions = ["Yes, create order", "Tell me more about these medicines", "Cancel"]
         
         elif llm_output.intent.value == "ORDER_REFILL":
-            response_text = "I can help you refill your prescription. "
-            response_text += "Let me check your prescription status. Would you like to proceed?"
-            suggestions = ["Yes, refill now", "Check refill date", "Cancel"]
-        
-        elif llm_output.intent.value == "INFO_REQUEST":
-            med_names = ", ".join([m.name if hasattr(m, 'name') else m.get("name", "") for m in all_medications])
+            # Generate multilingual response
+            response_text = await llm_service.generate_response(
+                user_message=request.message,
+                intent="ORDER_REFILL",
+                medications=all_medications
+            # Generate multilingual response
+            response_text = await llm_service.generate_response(
+                user_message=request.message,
+                intent="INFO_REQUEST",
+                medications=all_medications
+            )
             if med_names:
                 response_text = f"I can provide information about {med_names}. What would you like to know?"
             else:
@@ -305,20 +333,28 @@ async def chat(
                 if search_name:
                     medicines = await get_medicines_from_db(supabase, search=search_name, limit=5)
             
+            # Format medicine list for context
+            stock_info = ""
             if medicines:
-                # Format medicine list
-                stock_info = []
+                stock_items = []
                 for med in medicines[:5]:
                     name = med.get("name", "Unknown")
                     stock = med.get("stock_quantity", 0)
                     price = med.get("price", 0)
                     rx = "Rx Required" if med.get("prescription_required") else "OTC"
-                    stock_info.append(f"• **{name}**: {stock} in stock, ₹{price:.2f} ({rx})")
-                
-                response_text = f"Here are the available medicines:\n\n" + "\n".join(stock_info)
-                response_text += f"\n\nWe have {len(MOCK_MEDICINES) if not supabase else 'many more'} medicines in our catalog. Would you like to order any of these?"
-            else:
-                response_text = "I couldn't find specific stock information. Please check our Medicines page for the complete catalog."
+                    stock_items.append(f"• **{name}**: {stock} in stock, ₹{price:.2f} ({rx})")
+                stock_info = "\n".join(stock_items)
+            
+            # Generate multilingual response with stock info
+            response_context = {
+                "stock_info": stock_info if stock_info else "No specific stock information available"
+            }
+            response_text = await llm_service.generate_response(
+                user_message=request.message,
+                intent="STOCK_CHECK",
+                medications=all_medications,
+                context=response_context
+            )
             
             suggestions = ["Order medicine", "Search specific medicine", "View all categories"]
         
@@ -345,8 +381,16 @@ async def chat(
                 logger.info(f"Using stored context medications: {len(prescription_meds)}")
             
             if prescription_meds:
-                response_text = format_prescription_response(prescription_meds)
-                response_text += "\nWould you like to know more about any of these medications, or shall I help you order them?"
+                # Format prescription info for the response
+                prescription_info = format_prescription_response(prescription_meds)
+                
+                # Generate multilingual response
+                response_text = await llm_service.generate_response(
+                    user_message=request.message,
+                    intent="PRESCRIPTION_QUERY",
+                    medications=prescription_meds,
+                    prescription_info=prescription_info
+                )
                 suggestions = ["Order these medicines", "Tell me about side effects", "Check drug interactions", "Upload new prescription"]
                 all_medications = prescription_meds
             elif prescription_raw_text or (ocr_data and ocr_data.get("status") == "partial"):
@@ -356,26 +400,48 @@ async def chat(
                 if display_text:
                     # Truncate for display
                     display_text = display_text[:800] if len(display_text) > 800 else display_text
-                    response_text = f"I was able to read your prescription image, but had difficulty extracting specific medication names. Here's the text I found:\n\n{display_text}\n\nCould you tell me which specific medications you'd like to know about?"
+                    
+                    # Generate multilingual response with partial data
+                    response_context = {"prescription_raw_text": display_text}
+                    response_text = await llm_service.generate_response(
+                        user_message=request.message,
+                        intent="PRESCRIPTION_QUERY_PARTIAL",
+                        medications=[],
+                        context=response_context
+                    )
                 else:
-                    response_text = "I was able to partially read your prescription but couldn't extract the medication details clearly. Could you tell me the medication names, or try uploading a clearer image?"
+                    # Generate multilingual response for unclear prescription
+                    response_text = await llm_service.generate_response(
+                        user_message=request.message,
+                        intent="PRESCRIPTION_QUERY_UNCLEAR",
+                        medications=[]
+                    )
                 suggestions = ["Try uploading again", "Tell me medications manually", "Order medicine"]
             else:
-                response_text = "I don't have any prescription data to reference. Please upload a prescription image first using the 📷 button, and then I can answer your questions about it."
+                # Generate multilingual response for no prescription
+                response_text = await llm_service.generate_response(
+                    user_message=request.message,
+                    intent="PRESCRIPTION_QUERY_NONE",
+                    medications=[]
+                )
                 suggestions = ["Upload prescription", "Order medicine manually", "Check available stock"]
         
         elif llm_output.intent.value == "GREETING":
-            response_text = "Hello! 👋 Welcome to AI Pharmacist. I'm here to help you with:\n\n"
-            response_text += "• **Order medicines** - Just tell me what you need\n"
-            response_text += "• **Refill prescriptions** - I'll check your prescription status\n"
-            response_text += "• **Check stock** - Ask about medicine availability\n"
-            response_text += "• **Get medicine info** - Side effects, dosage, interactions\n"
-            response_text += "• **Upload prescription** - 📷 Click the image button to analyze\n\n"
-            response_text += "How can I help you today?"
+            # Generate multilingual greeting response
+            response_text = await llm_service.generate_response(
+                user_message=request.message,
+                intent="GREETING",
+                medications=[]
+            )
             suggestions = ["Show available medicines", "Order medicine", "Refill prescription", "Upload prescription"]
         
         else:
-            response_text = "I'm not sure I understood your request completely. Could you please provide more details about what you need?"
+            # Generate multilingual response for unknown intent
+            response_text = await llm_service.generate_response(
+                user_message=request.message,
+                intent="UNKNOWN",
+                medications=[]
+            )
             suggestions = ["Order new medicine", "Refill prescription", "Check stock", "Get medicine info"]
         
         return ChatResponse(
@@ -390,9 +456,15 @@ async def chat(
     
     except Exception as e:
         logger.warning(f"Chat service error, providing default response: {e}")
-        # Return a default helpful response instead of crashing
+        # Return a default helpful response - try to make it multilingual if possible
+        try:
+            # Try to detect language from request if available
+            default_response = "I'm here to help with your medication needs. You can ask me about ordering medicines, refilling prescriptions, or upload a prescription image for me to analyze."
+        except:
+            default_response = "I'm here to help with your medication needs. You can ask me about ordering medicines, refilling prescriptions, or upload a prescription image for me to analyze."
+        
         return ChatResponse(
-            response="I'm here to help with your medication needs. You can ask me about ordering medicines, refilling prescriptions, or upload a prescription image for me to analyze.",
+            response=default_response,
             intent="FALLBACK",
             confidence=0.0,
             medications=[],

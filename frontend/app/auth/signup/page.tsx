@@ -58,12 +58,21 @@ export default function SignupPage() {
       setSuccess(true)
       setIsLoading(false)
       
-      // Redirect after 2 seconds
+      // Redirect after 1 second
       setTimeout(() => {
         router.push("/dashboard")
-      }, 2000)
+      }, 1000)
     } catch (err: any) {
-      setError(err.message || 'Failed to create account. Please try again.')
+      console.error('Signup error:', err);
+      
+      // Handle specific error cases
+      if (err.message?.includes('email rate limit')) {
+        setError('Too many signup attempts. Please try again in a few minutes, or use a different email address.')
+      } else if (err.message?.includes('User already registered')) {
+        setError('This email is already registered. Please login instead.')
+      } else {
+        setError(err.message || 'Failed to create account. Please try again.')
+      }
       setIsLoading(false)
     }
   }

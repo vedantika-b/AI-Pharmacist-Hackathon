@@ -169,3 +169,165 @@ Respond with ONLY valid JSON. No additional text."""
         
         prompt += "\nAnalyze the message and respond with JSON only."
         return prompt
+
+    async def generate_response(
+        self,
+        user_message: str,
+        intent: str,
+        medications: list,
+        context: Optional[dict] = None,
+        prescription_info: Optional[str] = None
+    ) -> str:
+        """
+        Generate a conversational response in the same language as the user.
+        
+        Args:
+            user_message: Original user input
+            intent: Detected intent (ORDER_NEW, STOCK_CHECK, etc.)
+            medications: List of medications from intent extraction
+            context: Optional context (stock info, prescription data, etc.)
+            prescription_info: Formatted prescription information if available
+        
+        Returns:
+            Conversational response in the user's language
+        """
+        try:
+            system_prompt = self._build_response_system_prompt()
+            user_prompt = self._build_response_user_prompt(
+                user_message, intent, medications, context, prescription_info
+            )
+            
+            # Call Groq API for conversational response
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,  # Slightly higher for natural conversation
+                max_tokens=512
+            )
+            
+            response_text = response.choices[0].message.content
+            logger.info(f"Generated multilingual response: {response_text[:100]}...")
+            
+            return response_text
+            
+        except Exception as e:
+            logger.error(f"Error generating response: {e}")
+            # Fallback to basic English response
+            return "I'm here to help with your medication needs. How can I assist you?"
+
+    def _build_response_system_prompt(self) -> str:
+        """Build system prompt for generating conversational responses with language matching."""
+        return """**🌍 CRITICAL: LANGUAGE MATCHING RULE (HIGHEST PRIORITY) 🌍**
+
+BEFORE doing ANYTHING else, you MUST:
+1. **DETECT** the language of the user's message (English, Hindi, Marathi, mixed language, etc.)
+2. **IDENTIFY** the script used (Roman/Latin script OR Devanagari script)
+3. **RESPOND** in the EXACT SAME language and script the user used
+
+**LANGUAGE DETECTION RULES:**
+- If user writes in Marathi (Devanagari script like "औषध"), respond in Marathi (Devanagari)
+- If user writes in Roman Marathi (like "aushadh", "mala sangha"), respond in Roman Marathi
+- If user writes in Hindi (Devanagari like "दवाई"), respond in Hindi (Devanagari)
+- If user writes in Roman Hindi, respond in Roman Hindi
+- If user writes in English, respond in English
+- If user writes in mixed language (Hinglish like "mujhe medicine chahiye"), respond in the SAME mix
+- If user mixes scripts (like "Please mala help kara"), keep the SAME mix in your response
+
+**ABSOLUTE RULES:**
+✅ ALWAYS match the user's language and script exactly
+✅ NEVER translate the user's message to a different language
+✅ NEVER switch scripts (Roman to Devanagari or vice versa) unless user does first
+✅ Mirror the user's language style (formal/informal)
+✅ This language rule OVERRIDES ALL other instructions below
+
+---
+
+**YOUR ROLE:**
+You are a helpful AI assistant for "AI Pharmacist", a pharmacy order system. You help customers with:
+- Ordering medicines
+- Checking stock availability
+- Providing medicine information
+- Processing prescriptions
+- Refilling orders
+- Answering questions about medications
+
+**RESPONSE GUIDELINES:**
+- Be friendly, professional, and helpful
+- Keep responses concise but informative (2-4 sentences)
+- Always offer next steps or suggestions
+- For orders: confirm what they want and ask to proceed
+- For info requests: provide helpful information and ask if they need more
+- For stock checks: list available medicines clearly
+- For prescriptions: acknowledge receipt and explain what you found
+- For greetings: respond warmly and ask how you can help
+
+**IMPORTANT:**
+- Remember to respond in the USER'S language (detected above)
+- Use culturally appropriate greetings and phrases
+- Keep the same tone and formality as the user
+- Be concise and actionable
+
+Respond naturally like a helpful pharmacy assistant would, in the user's language."""
+
+    def _build_response_user_prompt(
+        self,
+        user_message: str,
+        intent: str,
+        medications: list,
+        context: Optional[dict] = None,
+        prescription_info: Optional[str] = None
+    ) -> str:
+        """Build the user prompt for response generation."""
+        prompt = f"""User's original message: "{user_message}"
+
+Detected Intent: {intent}
+"""
+        
+        # Add medication info
+        if medications:
+            med_names = []
+            for med in medications:
+                if isinstance(med, dict):
+                    name = med.get("name", "")
+                    dosage = med.get("dosage")
+                    if dosage:
+                        med_names.append(f"{name} {dosage}")
+                    else:
+                        med_names.append(name)
+                else:
+                    med_names.append(str(med))
+            
+            if med_names:
+                prompt += f"Medications mentioned: {', '.join(med_names)}\n"
+        
+        # Add prescription info
+        if prescription_info:
+            prompt += f"\nPrescription Information:\n{prescription_info}\n"
+        
+        # Add context
+        if context:
+            if context.get("stock_info"):
+                prompt += f"\nAvailable Stock:\n{context['stock_info']}\n"
+            if context.get("requires_prescription"):
+                prompt += "\nNote: These medications require prescription verification.\n"
+            if context.get("suggestions"):
+                prompt += f"\nSuggested actions: {', '.join(context['suggestions'])}\n"
+        
+        prompt += f"""
+Based on the intent and context above, generate a helpful, conversational response.
+
+**CRITICAL REMINDER:** 
+- Detect the language of the user's message: "{user_message}"
+- Respond in the EXACT SAME language and script
+- If the message is in Marathi, respond in Marathi
+- If the message is in Hindi, respond in Hindi
+- If the message is in English, respond in English
+- If mixed (Hinglish), respond in the same mix
+- Match the script (Roman or Devanagari) exactly
+
+Generate your response now:"""
+        
+        return prompt

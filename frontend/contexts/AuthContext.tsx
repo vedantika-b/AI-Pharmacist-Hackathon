@@ -205,10 +205,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       } else {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Signup failed');
+        const errorMessage = errorData.detail || errorData.message || 'Signup failed';
+        
+        // Handle specific error cases
+        if (errorMessage.toLowerCase().includes('already registered') || 
+            errorMessage.toLowerCase().includes('already exists')) {
+          throw new Error('This email is already registered. Please login instead or use a different email.');
+        }
+        throw new Error(errorMessage);
       }
     } catch (backendError: any) {
-      console.log('Backend signup failed, trying Supabase:', backendError);
+      console.log('Backend signup error:', backendError);
       // If backend fails with specific error, throw it
       if (backendError.message && !backendError.message.includes('fetch')) {
         throw backendError;
