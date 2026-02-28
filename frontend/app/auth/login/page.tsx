@@ -10,6 +10,7 @@ import Link from "next/link"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { getPostAuthRedirect } from "@/lib/profile-check"
 
 // Demo credentials for easy login
 const DEMO_CREDENTIALS = {
@@ -44,8 +45,15 @@ export default function LoginPage() {
     const password = formData.get('password') as string
     
     try {
-      await signIn(email, password)
-      router.push("/dashboard")
+      const result = await signIn(email, password)
+      
+      // Check if profile is complete and redirect accordingly
+      if (result?.user?.id) {
+        const redirectUrl = await getPostAuthRedirect(result.user.id)
+        router.push(redirectUrl)
+      } else {
+        router.push("/dashboard")
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to sign in. Please check your credentials.')
       setIsLoading(false)
@@ -61,8 +69,15 @@ export default function LoginPage() {
     setIsLoading(true)
     setError(null)
     try {
-      await signIn(DEMO_CREDENTIALS.email, DEMO_CREDENTIALS.password)
-      router.push("/dashboard")
+      const result = await signIn(DEMO_CREDENTIALS.email, DEMO_CREDENTIALS.password)
+      
+      // Check if profile is complete and redirect accordingly
+      if (result?.user?.id) {
+        const redirectUrl = await getPostAuthRedirect(result.user.id)
+        router.push(redirectUrl)
+      } else {
+        router.push("/dashboard")
+      }
     } catch (err: any) {
       setError(err.message || 'Demo login failed. Please ensure the demo account exists.')
       setIsLoading(false)

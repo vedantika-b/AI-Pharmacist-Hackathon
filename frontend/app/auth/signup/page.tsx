@@ -10,6 +10,7 @@ import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { getPostAuthRedirect } from "@/lib/profile-check"
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -54,13 +55,13 @@ export default function SignupPage() {
     }
     
     try {
-      await signUp(email, password, fullName)
+      const result = await signUp(email, password, fullName)
       setSuccess(true)
       setIsLoading(false)
       
-      // Redirect after 1 second
+      // For new signups, always redirect to profile page after 1 second
       setTimeout(() => {
-        router.push("/dashboard")
+        router.push("/dashboard/profile")
       }, 1000)
     } catch (err: any) {
       console.error('Signup error:', err);
