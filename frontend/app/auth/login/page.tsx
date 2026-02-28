@@ -22,6 +22,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [requires2FA, setRequires2FA] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [totpCode, setTotpCode] = useState("")
   const router = useRouter()
   const { signIn, user, loading } = useAuth()
   const emailRef = useRef<HTMLInputElement>(null)
@@ -40,14 +44,47 @@ export default function LoginPage() {
     setError(null)
     
     const formData = new FormData(e.currentTarget)
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
+    const emailValue = formData.get('email') as string
+    const passwordValue = formData.get('password') as string
+    
+    // Store email and password for 2FA retry
+    setEmail(emailValue)
+    setPassword(passwordValue)
     
     try {
-      await signIn(email, password)
+      const result = await signIn(emailValue, passwordValue)
+      
+      // Check if 2FA is required
+      if (result.requires_2fa) {
+        setRequires2FA(true)
+        setIsLoading(false)
+        return
+      }
+      
       router.push("/dashboard")
     } catch (err: any) {
       setError(err.message || 'Failed to sign in. Please check your credentials.')
+      setIsLoading(false)
+    }
+  }
+
+  const handle2FASubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      const result = await signIn(email, password, totpCode)
+      
+      if (result.requires_2fa) {
+        setError("Invalid 2FA code. Please try again.")
+        setIsLoading(false)
+        return
+      }
+      
+      router.push("/dashboard")
+    } catch (err: any) {
+      setError(err.message || 'Invalid 2FA code. Please try again.')
       setIsLoading(false)
     }
   }
@@ -88,11 +125,67 @@ export default function LoginPage() {
 
         <Card className="border-2">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
+            <CardTitle className="text-2xl font-bold">
+              {requires2FA ? "Two-Factor Authentication" : "Welcome back"}
+            </CardTitle>
             <CardDescription>
-              Enter your credentials to access your account
+              {requires2FA 
+                ? "Enter the 6-digit code from Google Authenticator" 
+                : "Enter your credentials to access your account"}
             </CardDescription>
           </CardHeader>
+          
+          {requires2FA ? (
+            <form onSubmit={handle2FASubmit}>
+              <CardContent className="space-y-4">
+                {error && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-900 dark:text-red-300 border border-red-200 dark:border-red-900">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <p className="text-sm">{error}</p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="totpCode">Authentication Code</Label>
+                  <Input
+                    id="totpCode"
+                    name="totpCode"
+                    type="text"
+                    placeholder="000000"
+                    required
+                    maxLength={6}
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value)}
+                    className="text-center text-2xl tracking-widest"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground text-center">
+                    Open Google Authenticator and enter the 6-digit code
+                  </p>
+                </div>
+              </CardContent>
+              <CardFooter className="flex flex-col space-y-4">
+                <Button
+                  type="submit"
+                  className="w-full"
+                  size="lg"
+                  disabled={isLoading || totpCode.length !== 6}
+                >
+                  {isLoading ? "Verifying..." : "Verify"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setRequires2FA(false)
+                    setTotpCode("")
+                    setError(null)
+                  }}
+                >
+                  Back to Login
+                </Button>
+              </CardFooter>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               {error && (
@@ -199,6 +292,7 @@ export default function LoginPage() {
               </p>
             </CardFooter>
           </form>
+          )}
         </Card>
 
         <p className="text-center text-sm text-muted-foreground mt-8">

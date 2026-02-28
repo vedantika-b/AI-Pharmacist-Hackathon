@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2FA Test Page</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e7f3e7;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .error {
+            background: #ffe7e7;
+            color: #d32f2f;
+        }
+        .success {
+            background: #e7f3e7;
+            color: #2e7d32;
+        }
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .qr-code img {
+            max-width: 300px;
+            border: 2px solid #ddd;
+            padding: 10px;
+            background: white;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.ok {
+            background: #4CAF50;
+            color: white;
+        }
+        .status.fail {
+            background: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 Google Authenticator 2FA Test</h1>
+        
+        <div class="test-section">
+            <h2>Test 1: Create Account with 2FA</h2>
+            <input type="email" id="signupEmail" placeholder="Email (e.g., test@example.com)" value="test2fa@example.com">
+            <input type="password" id="signupPassword" placeholder="Password (min 6 chars)" value="password123">
+            <input type="text" id="signupName" placeholder="Full Name" value="Test User">
+            <button onclick="testSignup()">Create Account & Get QR Code</button>
+            <div id="signupResult"></div>
+            <div id="qrCodeContainer"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Test 2: Login with 2FA</h2>
+            <input type="email" id="loginEmail" placeholder="Email" value="">
+            <input type="password" id="loginPassword" placeholder="Password" value="">
+            <button onclick="testLoginStep1()">Step 1: Login (Password Only)</button>
+            <div id="loginStep1Result"></div>
+            
+            <div style="margin-top: 20px;">
+                <input type="text" id="totpCode" placeholder="6-digit code from Google Authenticator" maxlength="6">
+                <button onclick="testLoginStep2()">Step 2: Verify with 2FA Code</button>
+                <div id="loginStep2Result"></div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Backend Status</h2>
+            <button onclick="checkBackend()">Check Backend Health</button>
+            <div id="healthResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000/api/v1';
+        let currentUser = {
+            email: '',
+            password: ''
+        };
+
+        async function checkBackend() {
+            const resultDiv = document.getElementById('healthResult');
+            resultDiv.innerHTML = 'Checking...';
+            
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                const data = await response.json();
+                
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `✓ Backend is running!\n\n${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `✗ Backend is not running!\n\nError: ${error.message}\n\nMake sure backend is running on http://localhost:8000`;
+            }
+        }
+
+        async function testSignup() {
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const name = document.getElementById('signupName').value;
+            const resultDiv = document.getElementById('signupResult');
+            const qrDiv = document.getElementById('qrCodeContainer');
+            
+            resultDiv.innerHTML = 'Creating account...';
+            qrDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_URL}/auth/signup`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password,
+                        full_name: name
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store credentials for login test
+                    currentUser.email = email;
+                    currentUser.password = password;
+                    document.getElementById('loginEmail').value = email;
+                    document.getElementById('loginPassword').value = password;
+                    
+                    resultDiv.className = 'result success';
+                    
+                    let result = '✓ Account created successfully!\n\n';
+                    result += `Email: ${data.user.email}\n`;
+                    result += `User ID: ${data.user.id}\n`;
+                    result += `2FA Enabled: ${data.requires_2fa ? 'YES ✓' : 'NO ✗'}\n`;
+                    result += `QR Code: ${data.qr_code ? 'Received ✓' : 'Not received ✗'}\n\n`;
+                    
+                    if (data.qr_code) {
+                        result += '📱 Scan the QR code below with Google Authenticator app:\n';
+                        qrDiv.innerHTML = `
+                            <div class="qr-code">
+                                <img src="${data.qr_code}" alt="QR Code for Google Authenticator">
+                                <p><strong>Scan this with Google Authenticator!</strong></p>
+                                <p>1. Open Google Authenticator app</p>
+                                <p>2. Tap "+" button</p>
+                                <p>3. Select "Scan a QR code"</p>
+                                <p>4. Point camera at QR code above</p>
+                            </div>
+                        `;
+                    }
+                    
+                    resultDiv.innerHTML = result;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `✗ Signup failed!\n\n${data.detail || JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `✗ Error: ${error.message}`;
+            }
+        }
+
+        async function testLoginStep1() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const resultDiv = document.getElementById('loginStep1Result');
+            
+            resultDiv.innerHTML = 'Logging in...';
+            
+            // Store for step 2
+            currentUser.email = email;
+            currentUser.password = password;
+            
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    
+                    if (data.requires_2fa) {
+                        resultDiv.innerHTML = `✓ Password verified!\n\n🔐 2FA is required.\n\nPlease open Google Authenticator and enter the 6-digit code below.`;
+                    } else {
+                        resultDiv.innerHTML = `✓ Login successful (no 2FA required)\n\nToken: ${data.access_token.substring(0, 50)}...`;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `✗ Login failed!\n\n${data.detail || JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `✗ Error: ${error.message}`;
+            }
+        }
+
+        async function testLoginStep2() {
+            const totpCode = document.getElementById('totpCode').value;
+            const resultDiv = document.getElementById('loginStep2Result');
+            
+            if (!totpCode || totpCode.length !== 6) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '✗ Please enter a valid 6-digit code';
+                return;
+            }
+            
+            resultDiv.innerHTML = 'Verifying 2FA code...';
+            
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: currentUser.email,
+                        password: currentUser.password,
+                        totp_code: totpCode
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && !data.requires_2fa) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✓ 2FA verification successful!\n\n✓ You are now logged in!\n\nToken: ${data.access_token.substring(0, 50)}...`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `✗ Invalid 2FA code!\n\n${data.detail || 'Please try the current code from Google Authenticator'}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `✗ Error: ${error.message}`;
+            }
+        }
+
+        // Check backend on load
+        window.onload = checkBackend;
+    </script>
+</body>
+</html>

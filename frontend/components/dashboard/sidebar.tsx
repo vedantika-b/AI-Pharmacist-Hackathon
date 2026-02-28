@@ -12,7 +12,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  FileText
+  FileText,
+  ShoppingCart
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,7 @@ export default function Sidebar() {
     { icon: LayoutDashboard, label: t('dashboard', language), href: "/dashboard" },
     { icon: MessageSquare, label: t('chat', language), href: "/dashboard/chat" },
     { icon: Pill, label: t('medicines', language), href: "/dashboard/medicines" },
+    { icon: ShoppingCart, label: t('cart', language), href: "/dashboard/cart" },
     { icon: FileText, label: t('prescriptionOCR', language), href: "/dashboard/ocr" },
     { icon: Bell, label: t('alerts', language), href: "/dashboard/alerts" },
     { icon: Settings, label: t('settings', language), href: "/dashboard/settings" },

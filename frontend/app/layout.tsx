@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { CartProvider } from "@/contexts/CartContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -31,7 +32,9 @@ export default function RootLayout({
         >
           <AuthProvider>
             <LanguageProvider>
-              {children}
+              <CartProvider>
+                {children}
+              </CartProvider>
             </LanguageProvider>
           </AuthProvider>
         </ThemeProvider>

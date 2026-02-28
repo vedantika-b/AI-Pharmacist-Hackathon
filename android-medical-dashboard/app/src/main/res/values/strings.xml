@@ -1,0 +1,53 @@
+<resources>
+    <string name="app_name">Medical Dashboard</string>
+    <string name="app_logo">App Logo</string>
+    <string name="tagline">Your Health Companion</string>
+    
+    <!-- Login -->
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="login">Login</string>
+    
+    <!-- Dashboard -->
+    <string name="dashboard">Dashboard</string>
+    <string name="medicines">Medicines</string>
+    <string name="profile">Profile</string>
+    <string name="welcome_user">Welcome, User!</string>
+    <string name="dashboard_subtitle">Here\'s your health overview</string>
+    <string name="total_medicines">Total Medicines</string>
+    <string name="upcoming_reminders">Upcoming</string>
+    <string name="upcoming_reminders_title">Upcoming Reminders</string>
+    <string name="medicine_icon">Medicine Icon</string>
+    <string name="reminder_icon">Reminder Icon</string>
+    
+    <!-- Medicine Management -->
+    <string name="add_medicine">Add Medicine</string>
+    <string name="medicine_name">Medicine Name</string>
+    <string name="dosage">Dosage (e.g., 10mg)</string>
+    <string name="frequency">Frequency (e.g., 2x daily)</string>
+    <string name="start_date">Start Date</string>
+    <string name="end_date">End Date</string>
+    <string name="reminder_time">Reminder Time</string>
+    <string name="enable_reminder">Enable Reminder</string>
+    <string name="notes">Notes (optional)</string>
+    <string name="save">Save</string>
+    <string name="select">Select</string>
+    <string name="select_date">Select Date</string>
+    <string name="select_time">Select Time</string>
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="no_medicines">No medicines added yet</string>
+    
+    <!-- Profile -->
+    <string name="app_info">App Information</string>
+    <string name="app_version">Version 1.0</string>
+    <string name="app_description">Medical Dashboard helps you manage your medications and set reminders to never miss a dose.</string>
+    
+    <!-- Menu -->
+    <string name="toggle_theme">Toggle Theme</string>
+    <string name="logout">Logout</string>
+    
+    <!-- XML -->
+    <string name="data_extraction_rules">Data Extraction Rules</string>
+    <string name="backup_rules">Backup Rules</string>
+</resources>
