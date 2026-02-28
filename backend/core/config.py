@@ -71,11 +71,20 @@ class Settings(BaseSettings):
     
     # Security
     secret_key: Optional[str] = Field(default=None, alias="SECRET_KEY")
+    jwt_secret_key: str = Field(default="your-secret-key-change-in-production-use-openssl-rand-hex-32", alias="JWT_SECRET_KEY")
+    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    jwt_access_token_expire_minutes: int = Field(default=30, alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES", ge=5, le=1440)
     allowed_hosts: Union[str, list[str]] = Field(default="*", alias="ALLOWED_HOSTS")
     
     # Monitoring
     sentry_dsn: Optional[str] = Field(default=None, alias="SENTRY_DSN")
     enable_metrics: bool = Field(default=True, alias="ENABLE_METRICS")
+    
+    # Twilio SMS Configuration (Optional - will use mock mode if not configured)
+    twilio_account_sid: Optional[str] = Field(default=None, alias="TWILIO_ACCOUNT_SID")
+    twilio_auth_token: Optional[str] = Field(default=None, alias="TWILIO_AUTH_TOKEN")
+    twilio_phone_number: Optional[str] = Field(default=None, alias="TWILIO_PHONE_NUMBER")
+    sms_enabled: bool = Field(default=True, alias="SMS_ENABLED")
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -48,6 +48,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        // Check for backend auth user
+        const authUser = localStorage.getItem('auth_user');
+        const authToken = localStorage.getItem('auth_token');
+        if (authUser && authToken) {
+          const parsedUser = JSON.parse(authUser);
+          setUser(parsedUser);
+          setLoading(false);
+          return;
+        }
+
         if (!supabase) {
           setLoading(false);
           return;
@@ -112,9 +122,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Fall back to Supabase auth
+    // Try backend API login first
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const user = {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.full_name || data.user.email,
+        };
+        // Store token and user
+        localStorage.setItem('auth_token', data.access_token);
+        localStorage.setItem('auth_user', JSON.stringify(user));
+        setUser(user);
+        return;
+      }
+    } catch (backendError) {
+      console.log('Backend login failed, trying Supabase:', backendError);
+    }
+
+    // Fall back to Supabase auth if backend fails
     if (!supabase) {
-      throw new Error('Supabase not configured. Use demo credentials to login.');
+      throw new Error('Invalid credentials. Please check your email and password.');
     }
 
     const { error } = await supabase.auth.signInWithPassword({
@@ -140,8 +177,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Try backend API signup first
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          full_name: fullName 
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const user = {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.full_name || data.user.email,
+        };
+        // Store token and user
+        localStorage.setItem('auth_token', data.access_token);
+        localStorage.setItem('auth_user', JSON.stringify(user));
+        setUser(user);
+        return;
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Signup failed');
+      }
+    } catch (backendError: any) {
+      console.log('Backend signup failed, trying Supabase:', backendError);
+      // If backend fails with specific error, throw it
+      if (backendError.message && !backendError.message.includes('fetch')) {
+        throw backendError;
+      }
+    }
+
+    // Fall back to Supabase auth if backend fails
     if (!supabase) {
-      throw new Error('Supabase not configured. Use demo credentials to signup.');
+      throw new Error('Cannot create account. Please try again.');
     }
 
     const { error } = await supabase.auth.signUp({
@@ -160,8 +236,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    // Clear demo user if present
+    // Clear all auth data
     localStorage.removeItem(DEMO_STORAGE_KEY);
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
     setUser(null);
 
     // Also sign out from Supabase if configured
