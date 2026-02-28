@@ -40,15 +40,16 @@ def get_session_key(user_id: Optional[UUID], session_id: Optional[str]) -> str:
     return "default_session"
 
 
-def store_prescription_context(session_key: str, ocr_data: dict, medications: list, raw_text: str = ""):
+def store_prescription_context(session_key: str, ocr_data: dict, medications: list, raw_text: str = "", conversation_history: list = None):
     """Store prescription context for follow-up questions."""
     prescription_context[session_key] = {
         "ocr_data": ocr_data,
         "medications": medications,
         "raw_text": raw_text,
+        "conversation_history": conversation_history or [],
         "timestamp": datetime.now()
     }
-    logger.info(f"Stored prescription context for {session_key}: {len(medications)} medications, raw_text length: {len(raw_text)}")
+    logger.info(f"Stored prescription context for {session_key}: {len(medications)} medications, {len(conversation_history or [])} messages in history")
 
 
 def get_prescription_context(session_key: str) -> Optional[dict]:
@@ -121,6 +122,7 @@ class ChatRequest(BaseModel):
     user_id: Optional[UUID] = Field(default=None, description="User ID for context")
     session_id: Optional[str] = Field(default=None, description="Session tracking")
     image_base64: Optional[str] = Field(default=None, description="Base64 encoded prescription image")
+    conversation_history: Optional[List[dict]] = Field(default=None, description="Previous messages in conversation")
 
 
 class ChatResponse(BaseModel):
@@ -151,6 +153,16 @@ async def chat(
     try:
         # Get session key for context storage
         session_key = get_session_key(request.user_id, request.session_id)
+        
+        # Get or initialize conversation history (ChatGPT-like memory)
+        existing_context = get_prescription_context(session_key)
+        conversation_history = []
+        if existing_context and existing_context.get("conversation_history"):
+            conversation_history = existing_context["conversation_history"]
+        elif request.conversation_history:
+            conversation_history = request.conversation_history
+        
+        logger.info(f"Conversation history: {len(conversation_history)} messages")
         
         # Process prescription image if provided
         ocr_data = None
@@ -185,7 +197,7 @@ async def chat(
                 extracted_medications = extract_medications_from_ocr(ocr_result)
                 
                 # Store the prescription context with raw text for follow-up questions
-                store_prescription_context(session_key, ocr_data, extracted_medications, ocr_raw_text)
+                store_prescription_context(session_key, ocr_data, extracted_medications, ocr_raw_text, conversation_history)
                 
                 # If OCR found medications and user didn't provide a message, create one
                 if extracted_medications and not request.message:
@@ -197,7 +209,8 @@ async def chat(
                     ocr_error_response = await llm_service.generate_response(
                         user_message=request.message if request.message else "Uploaded prescription image",
                         intent="OCR_ERROR",
-                        medications=[]
+                        medications=[],
+                        conversation_history=conversation_history
                     )
                 except:
                     # Fallback if LLM fails
@@ -256,7 +269,8 @@ async def chat(
                 response_text = await llm_service.generate_response(
                     user_message=request.message,
                     intent="FALLBACK",
-                    medications=extracted_medications if extracted_medications else []
+                    medications=extracted_medications if extracted_medications else [],
+                    conversation_history=conversation_history
                 )
             except:
                 # Last resort fallback
@@ -295,7 +309,8 @@ async def chat(
                 user_message=request.message,
                 intent="ORDER_NEW",
                 medications=all_medications,
-                context=response_context
+                context=response_context,
+                conversation_history=conversation_history
             )
             suggestions = ["Yes, create order", "Tell me more about these medicines", "Cancel"]
         
@@ -304,17 +319,19 @@ async def chat(
             response_text = await llm_service.generate_response(
                 user_message=request.message,
                 intent="ORDER_REFILL",
-                medications=all_medications
+                medications=all_medications,
+                conversation_history=conversation_history
+            )
+            suggestions = ["Yes, refill now", "Check refill date", "Cancel"]
+        
+        elif llm_output.intent.value == "INFO_REQUEST":
             # Generate multilingual response
             response_text = await llm_service.generate_response(
                 user_message=request.message,
                 intent="INFO_REQUEST",
-                medications=all_medications
+                medications=all_medications,
+                conversation_history=conversation_history
             )
-            if med_names:
-                response_text = f"I can provide information about {med_names}. What would you like to know?"
-            else:
-                response_text = "I can provide information about any medicine. Which medicine would you like to know about?"
             suggestions = [
                 "Dosage instructions",
                 "Side effects",
@@ -353,7 +370,8 @@ async def chat(
                 user_message=request.message,
                 intent="STOCK_CHECK",
                 medications=all_medications,
-                context=response_context
+                context=response_context,
+                conversation_history=conversation_history
             )
             
             suggestions = ["Order medicine", "Search specific medicine", "View all categories"]
@@ -389,7 +407,8 @@ async def chat(
                     user_message=request.message,
                     intent="PRESCRIPTION_QUERY",
                     medications=prescription_meds,
-                    prescription_info=prescription_info
+                    prescription_info=prescription_info,
+                    conversation_history=conversation_history
                 )
                 suggestions = ["Order these medicines", "Tell me about side effects", "Check drug interactions", "Upload new prescription"]
                 all_medications = prescription_meds
@@ -407,14 +426,16 @@ async def chat(
                         user_message=request.message,
                         intent="PRESCRIPTION_QUERY_PARTIAL",
                         medications=[],
-                        context=response_context
+                        context=response_context,
+                        conversation_history=conversation_history
                     )
                 else:
                     # Generate multilingual response for unclear prescription
                     response_text = await llm_service.generate_response(
                         user_message=request.message,
                         intent="PRESCRIPTION_QUERY_UNCLEAR",
-                        medications=[]
+                        medications=[],
+                        conversation_history=conversation_history
                     )
                 suggestions = ["Try uploading again", "Tell me medications manually", "Order medicine"]
             else:
@@ -422,7 +443,8 @@ async def chat(
                 response_text = await llm_service.generate_response(
                     user_message=request.message,
                     intent="PRESCRIPTION_QUERY_NONE",
-                    medications=[]
+                    medications=[],
+                    conversation_history=conversation_history
                 )
                 suggestions = ["Upload prescription", "Order medicine manually", "Check available stock"]
         
@@ -431,18 +453,59 @@ async def chat(
             response_text = await llm_service.generate_response(
                 user_message=request.message,
                 intent="GREETING",
-                medications=[]
+                medications=[],
+                conversation_history=conversation_history
             )
             suggestions = ["Show available medicines", "Order medicine", "Refill prescription", "Upload prescription"]
+        
+        elif llm_output.intent.value == "SYMPTOM_QUERY":
+            # User mentioned symptoms - ask follow-up questions first
+            response_text = await llm_service.generate_response(
+                user_message=request.message,
+                intent="SYMPTOM_QUERY",
+                medications=[],
+                conversation_history=conversation_history
+            )
+            suggestions = ["Tell me more", "Suggest medicine", "Check available medicines"]
         
         else:
             # Generate multilingual response for unknown intent
             response_text = await llm_service.generate_response(
                 user_message=request.message,
                 intent="UNKNOWN",
-                medications=[]
+                medications=[],
+                conversation_history=conversation_history
             )
             suggestions = ["Order new medicine", "Refill prescription", "Check stock", "Get medicine info"]
+        
+        # Update conversation history with current exchange (ChatGPT-like memory)
+        conversation_history.append({
+            "role": "user",
+            "content": request.message
+        })
+        conversation_history.append({
+            "role": "assistant", 
+            "content": response_text
+        })
+        
+        # Store updated conversation history in context
+        if existing_context:
+            existing_context["conversation_history"] = conversation_history
+            store_prescription_context(
+                session_key,
+                existing_context.get("ocr_data", {}),
+                existing_context.get("medications", []),
+                existing_context.get("raw_text", ""),
+                conversation_history
+            )
+        else:
+            store_prescription_context(
+                session_key,
+                ocr_data or {},
+                all_medications,
+                ocr_raw_text,
+                conversation_history
+            )
         
         return ChatResponse(
             response=response_text,

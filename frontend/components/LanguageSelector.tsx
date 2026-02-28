@@ -23,11 +23,6 @@ const languages = [
   { code: 'kn' as Language, native: 'ಕನ್ನಡ', english: 'Kannada', flag: '🇮🇳' },
   { code: 'ml' as Language, native: 'മലയാളം', english: 'Malayalam', flag: '🇮🇳' },
   { code: 'pa' as Language, native: 'ਪੰਜਾਬੀ', english: 'Punjabi', flag: '🇮🇳' },
-  { code: 'or' as Language, native: 'ଓଡ଼ିଆ', english: 'Odia', flag: '🇮🇳' },
-  { code: 'as' as Language, native: 'অসমীয়া', english: 'Assamese', flag: '🇮🇳' },
-  { code: 'mai' as Language, native: 'मैथिली', english: 'Maithili', flag: '🇮🇳' },
-  { code: 'lus' as Language, native: 'Mizo ṭawng', english: 'Mizo', flag: '🇮🇳' },
-  { code: 'mni' as Language, native: 'ꯃꯩꯇꯩꯂꯣꯟ', english: 'Meitei', flag: '🇮🇳' },
 ];
 
 export function LanguageSelector() {

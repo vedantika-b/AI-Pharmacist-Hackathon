@@ -64,13 +64,15 @@ export default function ChatPage() {
     },
     onError: (error) => {
       console.error('Voice error:', error)
+      // Show user-friendly alert
+      alert(error)
     }
   })
 
   const { isSpeaking, speak, stop } = useTextToSpeech({
     language: language === "hi" ? "hi-IN" : language === "mr" ? "mr-IN" : "en-IN",
-    rate: 1,
-    pitch: 1,
+    rate: 0.9, // Slightly slower for natural clarity
+    pitch: 1.05, // Slightly higher for warmth
     volume: 1,
   })
 
@@ -211,8 +213,40 @@ export default function ChatPage() {
     // Convert **bold** to <strong>
     const withBold = escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
 
+    // Convert URLs to clickable links (open in new tab)
+    const withLinks = withBold.replace(
+      /(https?:\/\/[^\s<]+)/g,
+      '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline font-medium">🔗 Click here</a>'
+    )
+
     // Preserve newlines
-    return withBold.replace(/\n/g, "<br />")
+    return withLinks.replace(/\n/g, "<br />")
+  }
+
+  // Extract platform links from message for quick access buttons
+  const extractPlatformLinks = (text: string) => {
+    const platforms = [
+      { name: 'PharmEasy', pattern: /https:\/\/pharmeasy\.in\/[^\s]+/i, icon: '🏪', color: 'from-teal-500 to-green-500' },
+      { name: 'Netmeds', pattern: /https:\/\/www\.netmeds\.com\/[^\s]+/i, icon: '💊', color: 'from-blue-500 to-cyan-500' },
+      { name: 'Apollo Pharmacy', pattern: /https:\/\/www\.apollopharmacy\.in\/[^\s]+/i, icon: '⚕️', color: 'from-red-500 to-pink-500' },
+      { name: '1mg', pattern: /https:\/\/www\.1mg\.com\/[^\s]+/i, icon: '🩺', color: 'from-orange-500 to-amber-500' },
+    ]
+
+    const found: Array<{ name: string; url: string; icon: string; color: string }> = []
+    
+    platforms.forEach(platform => {
+      const match = text.match(platform.pattern)
+      if (match) {
+        found.push({
+          name: platform.name,
+          url: match[0],
+          icon: platform.icon,
+          color: platform.color
+        })
+      }
+    })
+
+    return found
   }
 
   return (
@@ -309,6 +343,45 @@ export default function ChatPage() {
                         </Button>
                       </div>
                     )}
+
+                    {/* Platform Links - Quick Order Buttons */}
+                    {message.type === "ai" && (() => {
+                      const platformLinks = extractPlatformLinks(message.content)
+                      if (platformLinks.length > 0) {
+                        return (
+                          <div className="mt-4 space-y-2">
+                            <p className="text-xs font-semibold text-muted-foreground">🛒 Order Medicine:</p>
+                            <div className="grid grid-cols-1 gap-2">
+                              {platformLinks.map((platform, idx) => (
+                                <a
+                                  key={idx}
+                                  href={platform.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn(
+                                      "w-full justify-start gap-3 h-auto py-3 px-4 border-2 hover:scale-105 transition-all",
+                                      "bg-gradient-to-r", platform.color, "text-white border-white/20 hover:border-white/40"
+                                    )}
+                                  >
+                                    <span className="text-2xl">{platform.icon}</span>
+                                    <div className="flex-1 text-left">
+                                      <div className="font-bold text-base">{platform.name}</div>
+                                      <div className="text-xs opacity-90">Tap to order now →</div>
+                                    </div>
+                                  </Button>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
                     
                     {/* Show intent and confidence for AI messages */}
                     {message.type === "ai" && message.intent && (

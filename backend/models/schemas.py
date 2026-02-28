@@ -19,6 +19,7 @@ class IntentType(str, Enum):
     STOCK_CHECK = "STOCK_CHECK"
     GREETING = "GREETING"
     PRESCRIPTION_QUERY = "PRESCRIPTION_QUERY"  # Questions about uploaded prescription
+    SYMPTOM_QUERY = "SYMPTOM_QUERY"  # User mentions symptoms like fever, headache, etc.
     UNKNOWN = "UNKNOWN"
 
 
