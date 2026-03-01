@@ -125,9 +125,12 @@ export default function LoginPage() {
 
         <Card className="border-2">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold">
-              {requires2FA ? "Two-Factor Authentication" : "Welcome back"}
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              {requires2FA && <Shield className="h-6 w-6 text-green-600" />}
+              <CardTitle className="text-2xl font-bold">
+                {requires2FA ? "Two-Factor Authentication" : "Welcome back"}
+              </CardTitle>
+            </div>
             <CardDescription>
               {requires2FA 
                 ? "Enter the 6-digit code from Google Authenticator" 
@@ -138,6 +141,14 @@ export default function LoginPage() {
           {requires2FA ? (
             <form onSubmit={handle2FASubmit}>
               <CardContent className="space-y-4">
+                {/* 2FA Security Indicator */}
+                <div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                  <p className="text-sm text-green-800 dark:text-green-200 text-center font-semibold flex items-center justify-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    🔒 Your account is protected with 2FA
+                  </p>
+                </div>
+
                 {error && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-900 dark:text-red-300 border border-red-200 dark:border-red-900">
                     <AlertCircle className="h-4 w-4 shrink-0" />
@@ -154,13 +165,19 @@ export default function LoginPage() {
                     required
                     maxLength={6}
                     value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value)}
-                    className="text-center text-2xl tracking-widest"
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                    className="text-center text-2xl tracking-widest font-mono"
                     autoComplete="off"
+                    autoFocus
                   />
-                  <p className="text-xs text-muted-foreground text-center">
-                    Open Google Authenticator and enter the 6-digit code
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground text-center">
+                      Open <span className="font-semibold">Google Authenticator</span> and enter the 6-digit code
+                    </p>
+                    <p className="text-xs text-muted-foreground text-center">
+                      Code changes every 30 seconds
+                    </p>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="flex flex-col space-y-4">
@@ -170,7 +187,17 @@ export default function LoginPage() {
                   size="lg"
                   disabled={isLoading || totpCode.length !== 6}
                 >
-                  {isLoading ? "Verifying..." : "Verify"}
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="mr-2 h-4 w-4" />
+                      Verify & Login
+                    </>
+                  )}
                 </Button>
                 <Button
                   type="button"
@@ -180,8 +207,9 @@ export default function LoginPage() {
                     setTotpCode("")
                     setError(null)
                   }}
+                  size="sm"
                 >
-                  Back to Login
+                  ← Back to Login
                 </Button>
               </CardFooter>
             </form>

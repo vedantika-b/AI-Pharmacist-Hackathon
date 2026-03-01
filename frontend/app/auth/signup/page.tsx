@@ -137,7 +137,7 @@ export default function SignupPage() {
                 <CardTitle className="text-2xl font-bold">Verify Phone Number</CardTitle>
               </div>
               <CardDescription>
-                Enter the OTP sent to {phoneNumber}
+                Step 1 of 2: Enter the OTP sent to {phoneNumber}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -171,6 +171,14 @@ export default function SignupPage() {
                 <p className="text-sm text-muted-foreground">
                   OTP valid for 5 minutes
                 </p>
+
+                {/* Next Step Indicator */}
+                <div className="w-full p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <p className="text-sm text-blue-800 dark:text-blue-200 text-center flex items-center justify-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    <span>Next: Setup 2FA with Google Authenticator</span>
+                  </p>
+                </div>
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-2">
@@ -192,7 +200,7 @@ export default function SignupPage() {
                 disabled={otpCode.length !== 6}
               >
                 <Shield className="mr-2 h-4 w-4" />
-                Verify OTP
+                Verify OTP & Continue
               </Button>
               <Button
                 variant="ghost"
@@ -201,32 +209,54 @@ export default function SignupPage() {
                   if (qrCode) setShowQrCode(true)
                 }}
                 className="w-full"
+                size="sm"
               >
-                Skip for now
+                Skip OTP (Go to 2FA Setup)
               </Button>
             </CardFooter>
           </Card>
         ) : showQrCode && qrCode ? (
           <Card className="border-2">
             <CardHeader className="space-y-1">
-              <CardTitle className="text-2xl font-bold">Setup 2FA Authentication</CardTitle>
+              <div className="flex items-center gap-2">
+                <Shield className="h-6 w-6 text-green-600" />
+                <CardTitle className="text-2xl font-bold">Setup 2FA Authentication</CardTitle>
+              </div>
               <CardDescription>
-                Scan this QR code with Google Authenticator app
+                {phoneNumber ? "Step 2 of 2: " : ""}Secure your account with Google Authenticator
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col items-center space-y-4">
-                <div className="p-4 bg-white rounded-lg">
+                {/* Security Message */}
+                <div className="w-full p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                  <p className="text-sm text-green-800 dark:text-green-200 text-center font-semibold">
+                    ✅ Two-Factor Authentication Enabled!
+                  </p>
+                  <p className="text-xs text-green-700 dark:text-green-300 text-center mt-1">
+                    Your account will be protected with 2FA from now on
+                  </p>
+                </div>
+
+                <div className="p-4 bg-white rounded-lg shadow-md">
                   <img src={qrCode} alt="QR Code" className="w-64 h-64" />
                 </div>
                 <div className="text-center space-y-2">
                   <p className="font-semibold text-lg">Setup Instructions:</p>
-                  <ol className="text-sm text-left space-y-1 list-decimal list-inside">
-                    <li>Install Google Authenticator on your phone</li>
-                    <li>Open the app and tap the + button</li>
-                    <li>Scan this QR code with your camera</li>
-                    <li>Save the 6-digit code for future logins</li>
+                  <ol className="text-sm text-left space-y-2 list-decimal list-inside bg-muted p-4 rounded-lg">
+                    <li>Download <span className="font-semibold">Google Authenticator</span> app on your phone</li>
+                    <li>Open the app and tap the <span className="font-semibold">+</span> button</li>
+                    <li>Choose <span className="font-semibold">Scan QR Code</span></li>
+                    <li>Point your camera at this QR code</li>
+                    <li><span className="font-semibold text-primary">Important:</span> You'll need the 6-digit code during login!</li>
                   </ol>
+                </div>
+
+                {/* Warning Message */}
+                <div className="w-full p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <p className="text-sm text-amber-800 dark:text-amber-200 text-center">
+                    ⚠️ Keep your authenticator app safe - you'll need it to login!
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -236,7 +266,7 @@ export default function SignupPage() {
                 className="w-full"
                 size="lg"
               >
-                Continue to Dashboard
+                I've Saved It - Continue to Dashboard
               </Button>
             </CardFooter>
           </Card>
@@ -250,6 +280,14 @@ export default function SignupPage() {
             </CardHeader>
             <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {/* 2FA Info Banner */}
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-200 text-center flex items-center justify-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  <span className="font-semibold">2FA Protection Enabled:</span> Your account will be secured with Google Authenticator
+                </p>
+              </div>
+
               {error && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-900 dark:text-red-300 border border-red-200 dark:border-red-900">
                   <AlertCircle className="h-4 w-4 shrink-0" />
@@ -259,7 +297,7 @@ export default function SignupPage() {
               {success && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 text-green-900 dark:text-green-300 border border-green-200 dark:border-green-900">
                   <CheckCircle className="h-4 w-4 shrink-0" />
-                  <p className="text-sm">Account created successfully! Redirecting...</p>
+                  <p className="text-sm">Account created successfully! Setting up 2FA...</p>
                 </div>
               )}
               <div className="space-y-2">
