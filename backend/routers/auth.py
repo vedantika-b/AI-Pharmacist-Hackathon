@@ -119,24 +119,30 @@ def generate_totp_secret() -> str:
 
 
 def generate_qr_code(email: str, secret: str, issuer: str = "AI Pharmacist") -> str:
-    """Generate QR code URL for Google Authenticator."""
+    """Generate QR code URL for Google Authenticator - Optimized for speed."""
     # Create TOTP URI
     totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
         name=email,
         issuer_name=issuer
     )
     
-    # Generate QR code
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    # Generate QR code with optimized settings for faster generation
+    # version=1 (smallest), box_size=6 (smaller but readable), border=2 (minimal)
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,  # Lowest error correction = faster
+        box_size=6,  # Reduced from 10 for faster generation
+        border=2,    # Reduced from 5 for faster generation
+    )
     qr.add_data(totp_uri)
     qr.make(fit=True)
     
-    # Create image
+    # Create image with optimized settings
     img = qr.make_image(fill_color="black", back_color="white")
     
     # Convert to base64
     buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
+    img.save(buffered, format="PNG", optimize=True)  # Add optimize flag
     img_str = base64.b64encode(buffered.getvalue()).decode()
     
     return f"data:image/png;base64,{img_str}"

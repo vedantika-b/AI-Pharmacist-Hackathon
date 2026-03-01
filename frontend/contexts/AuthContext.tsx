@@ -111,18 +111,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string, totpCode?: string) => {
-    // Check for demo credentials first (works offline)
-    if (email === DEMO_USER.email && password === DEMO_USER.password) {
-      const demoUser = {
-        id: DEMO_USER.id,
-        email: DEMO_USER.email,
-        name: DEMO_USER.name,
-      };
-      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(demoUser));
-      setUser(demoUser);
-      return {};
-    }
-
     // Try backend API login first
     try {
       const response = await fetch('http://localhost:8000/api/v1/auth/login', {
@@ -185,18 +173,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string, phoneNumber?: string) => {
-    // Allow demo user "signup" (just logs in)
-    if (email === DEMO_USER.email) {
-      const demoUser = {
-        id: DEMO_USER.id,
-        email: DEMO_USER.email,
-        name: fullName || DEMO_USER.name,
-      };
-      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(demoUser));
-      setUser(demoUser);
-      return {};
-    }
-
     // Try backend API signup first
     try {
       const response = await fetch('http://localhost:8000/api/v1/auth/signup', {

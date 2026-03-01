@@ -77,23 +77,23 @@ export default function SignupPage() {
       setSuccess(true)
       setIsLoading(false)
       
-      // Save QR code but don't show it yet (OTP verification comes first)
+      // Save QR code and show 2FA setup immediately
       if (result.qr_code) {
         console.log("QR Code received! Length:", result.qr_code.length)
         setQrCode(result.qr_code)
+        // Show QR code immediately for faster 2FA setup
+        setShowQrCode(true)
       }
       
-      // Check if OTP was sent - show OTP screen first
+      // Check if OTP was sent - but don't block 2FA setup
       if (result.otp_sent && result.otp_code_demo) {
         console.log("OTP sent to phone!")
-        setOtpSent(true)
         setDemoOtp(result.otp_code_demo)  // For demo only - shows OTP
-        // Don't show QR code yet - wait for OTP verification
-      } else if (result.qr_code) {
-        // No OTP but has QR code - show QR directly
-        setShowQrCode(true)
-      } else {
-        console.log("No QR code or OTP in result, redirecting...")
+        // Show info that OTP was sent, but continue to 2FA
+      }
+      
+      if (!result.qr_code) {
+        console.log("No QR code in result, redirecting...")
         // Redirect after 2 seconds if no 2FA
         setTimeout(() => {
           router.push("/dashboard")
@@ -215,7 +215,7 @@ export default function SignupPage() {
               </Button>
             </CardFooter>
           </Card>
-        ) : showQrCode && qrCode ? (
+        ) : showQrCode ? (
           <Card className="border-2">
             <CardHeader className="space-y-1">
               <div className="flex items-center gap-2">
@@ -228,18 +228,15 @@ export default function SignupPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col items-center space-y-4">
-                {/* Security Message */}
-                <div className="w-full p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-                  <p className="text-sm text-green-800 dark:text-green-200 text-center font-semibold">
-                    ✅ Two-Factor Authentication Enabled!
-                  </p>
-                  <p className="text-xs text-green-700 dark:text-green-300 text-center mt-1">
-                    Your account will be protected with 2FA from now on
-                  </p>
-                </div>
-
-                <div className="p-4 bg-white rounded-lg shadow-md">
-                  <img src={qrCode} alt="QR Code" className="w-64 h-64" />
+                <div className="p-4 bg-white rounded-lg flex items-center justify-center min-h-[256px] min-w-[256px]">
+                  {qrCode ? (
+                    <img src={qrCode} alt="QR Code" className="w-64 h-64" />
+                  ) : (
+                    <div className="flex flex-col items-center space-y-2">
+                      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                      <p className="text-sm text-muted-foreground">Generating QR Code...</p>
+                    </div>
+                  )}
                 </div>
                 <div className="text-center space-y-2">
                   <p className="font-semibold text-lg">Setup Instructions:</p>

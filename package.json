@@ -17,5 +17,9 @@
   "bugs": {
     "url": "https://github.com/vedantika-b/AI-Pharmacist-Hackathon/issues"
   },
-  "homepage": "https://github.com/vedantika-b/AI-Pharmacist-Hackathon#readme"
+  "homepage": "https://github.com/vedantika-b/AI-Pharmacist-Hackathon#readme",
+  "dependencies": {
+    "@types/qrcode": "^1.5.6",
+    "qrcode": "^1.5.4"
+  }
 }

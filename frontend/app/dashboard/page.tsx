@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [recentOrders, setRecentOrders] = useState<any[]>([])
   const [insights, setInsights] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const { language } = useLanguage()
   const { user } = useAuth()
 
@@ -40,16 +41,40 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
+      setError(null)
+      
+      // Fetch data with proper error handling
       const [statsData, ordersData, insightsData] = await Promise.all([
-        getDashboardStats(),
-        getRecentOrders(4),
-        getDashboardInsights()
+        getDashboardStats().catch(err => {
+          console.error('Stats API failed:', err)
+          return null
+        }),
+        getRecentOrders(4).catch(err => {
+          console.error('Orders API failed:', err)
+          return []
+        }),
+        getDashboardInsights().catch(err => {
+          console.error('Insights API failed:', err)
+          return []
+        })
       ])
+      
+      // Check if any data was fetched
+      if (!statsData && ordersData.length === 0 && insightsData.length === 0) {
+        throw new Error('All API requests failed. Backend may not be running.')
+      }
+      
       setStats(statsData as any)
       setRecentOrders(ordersData as any[])
       setInsights(insightsData as any[])
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      setError(
+        `Unable to connect to the API server. ` +
+        `Please ensure the backend is running on http://localhost:8000. ` +
+        `Error: ${errorMessage}`
+      )
     } finally {
       setLoading(false)
     }
@@ -138,6 +163,38 @@ export default function DashboardPage() {
       <div className="flex items-center justify-center h-[calc(100vh-200px)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <span className="ml-2 text-muted-foreground">{t('loading', language)}</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <Card className="max-w-md w-full border-destructive/50">
+          <CardHeader>
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-6 w-6" />
+              <CardTitle>Connection Error</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">{error}</p>
+            <div className="bg-muted p-3 rounded-md text-sm">
+              <p className="font-semibold mb-2">To start the backend:</p>
+              <ol className="list-decimal list-inside space-y-1 text-xs">
+                <li>Open a terminal in the backend folder</li>
+                <li>Run: <code className="bg-background px-1 py-0.5 rounded">python -m uvicorn main:app --reload</code></li>
+                <li>Wait for the server to start on port 8000</li>
+              </ol>
+            </div>
+            <button
+              onClick={() => fetchDashboardData()}
+              className="w-full py-2 px-4 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            >
+              Retry Connection
+            </button>
+          </CardContent>
+        </Card>
       </div>
     )
   }

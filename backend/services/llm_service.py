@@ -70,20 +70,88 @@ class LLMService:
             
         except json.JSONDecodeError as e:
             logger.error(f"❌ Failed to parse LLM output as JSON: {e}")
-            # Fallback to UNKNOWN intent
-            return LLMIntentOutput(
-                intent=IntentType.UNKNOWN,
-                confidence=0.0,
-                summary="Failed to parse user intent"
-            )
+            logger.info("🔄 Falling back to rule-based intent detection")
+            # Use rule-based fallback when JSON parsing fails
+            return self._rule_based_intent_detection(user_message, user_context)
         
         except Exception as e:
             logger.error(f"❌ Error in LLM service: {type(e).__name__}: {str(e)}")
+            logger.info("🔄 Falling back to rule-based intent detection")
+            # Use rule-based fallback when LLM fails
+            return self._rule_based_intent_detection(user_message, user_context)
+    
+    def _rule_based_intent_detection(self, message: str, context: Optional[dict] = None) -> LLMIntentOutput:
+        """Fallback rule-based intent detection when LLM fails."""
+        message_lower = message.lower()
+        
+        # Symptom patterns (Hindi/Hinglish/English)
+        symptom_keywords = [
+            'bukhar', 'fever', 'bukhar hai', 'तापमान',
+            'headache', 'sir dard', 'सिर दर्द', 'sar dard',
+            'pet dard', 'stomach', 'पेट दर्द', 'stomach pain',
+            'cough', 'khansi', 'खांसी', 'cold', 'sardi',
+            'body pain', 'badan dard', 'बदन दर्द',
+            'throat', 'gala', 'गला खराब',
+            'diarrhea', 'loose motion', 'दस्त',
+            'vomiting', 'ulti', 'उल्टी',
+            'dizzy', 'chakkar', 'चक्कर'
+        ]
+        
+        # Greeting patterns
+        greeting_keywords = ['hello', 'hi', 'hey', 'namaste', 'नमस्ते', 'good morning', 'good evening']
+        
+        # Order patterns
+        order_keywords = ['order', 'buy', 'purchase', 'chahiye', 'चाहिए', 'lena hai', 'kharidna']
+        
+        # Stock check patterns
+        stock_keywords = ['available', 'stock', 'hai kya', 'mil sakta', 'उपलब्ध']
+        
+        # Check for symptoms first (highest priority)
+        if any(keyword in message_lower for keyword in symptom_keywords):
             return LLMIntentOutput(
-                intent=IntentType.UNKNOWN,
-                confidence=0.0,
-                summary=f"Error: {str(e)}"
+                intent=IntentType.SYMPTOM_QUERY,
+                confidence=0.8,
+                medications=[],
+                requires_prescription=False,
+                summary="Customer reporting health symptoms (rule-based detection)"
             )
+        
+        # Check for greetings
+        if any(keyword in message_lower for keyword in greeting_keywords):
+            return LLMIntentOutput(
+                intent=IntentType.GREETING,
+                confidence=0.9,
+                medications=[],
+                requires_prescription=False,
+                summary="Customer greeting (rule-based detection)"
+            )
+        
+        # Check for orders
+        if any(keyword in message_lower for keyword in order_keywords):
+            return LLMIntentOutput(
+                intent=IntentType.ORDER_NEW,
+                confidence=0.7,
+                medications=[],
+                requires_prescription=False,
+                summary="Customer wants to order medicine (rule-based detection)"
+            )
+        
+        # Check for stock inquiry
+        if any(keyword in message_lower for keyword in stock_keywords):
+            return LLMIntentOutput(
+                intent=IntentType.STOCK_CHECK,
+                confidence=0.7,
+                medications=[],
+                requires_prescription=False,
+                summary="Customer checking stock (rule-based detection)"
+            )
+        
+        # Default to UNKNOWN
+        return LLMIntentOutput(
+            intent=IntentType.UNKNOWN,
+            confidence=0.0,
+            summary=f"Error: {str(e)}"
+        )
     
     def _build_system_prompt(self) -> str:
         """Build the system prompt for intent extraction."""
@@ -216,8 +284,299 @@ Respond with ONLY valid JSON. No additional text."""
             
         except Exception as e:
             logger.error(f"Error generating response: {e}")
-            # Fallback to basic English response
+            logger.info("🔄 Falling back to rule-based response generation")
+            # Use rule-based response generation
+            return self._rule_based_response_generation(user_message, intent, medications, context)
+    
+    def _rule_based_response_generation(
+        self,
+        user_message: str,
+        intent: str,
+        medications: list,
+        context: Optional[dict] = None
+    ) -> str:
+        """Generate responses without LLM using templates."""
+        message_lower = user_message.lower()
+        
+        # Detect language (simple heuristic)
+        is_hindi = any(word in message_lower for word in ['mujhe', 'hai', 'kya', 'mera', 'mere', 'ka', 'ki', 'ke'])
+        
+        if intent == "SYMPTOM_QUERY":
+            return self._generate_symptom_response(user_message, is_hindi)
+        elif intent == "GREETING":
+            if is_hindi:
+                return "Namaste! 🙏 Main aapki medicine ki madad ke liye yahan hoon. Aapko kya chahiye?"
+            return "Hello! 👋 I'm here to help with your medication needs. How can I assist you?"
+        elif intent == "ORDER_NEW":
+            if is_hindi:
+                return "Ji, medicine order karne mein madad kar sakta hoon. Konsi medicine chahiye?"
+            return "I can help you order medicines. Which medicine do you need?"
+        elif intent == "STOCK_CHECK":
+            if is_hindi:
+                return "Stock check karne mein madad karunga. Konsi medicine ka stock dekhna hai?"
+            return "I can check medicine availability. Which medicine are you looking for?"
+        else:
+            if is_hindi:
+                return "Main aapki madad ke liye yahan hoon. Medicine order karna hai ya kuch puchna hai?"
             return "I'm here to help with your medication needs. How can I assist you?"
+    
+    def _generate_symptom_response(self, message: str, is_hindi: bool) -> str:
+        """Generate symptom-based medicine recommendations with pharmacy links."""
+        message_lower = message.lower()
+        
+        # Medicine recommendations based on symptoms
+        if 'bukhar' in message_lower or 'fever' in message_lower:
+            if is_hindi:
+                return """Bukhar hai? Kitna degree hai aur kab se hai? 🌡️
+
+Abhi ke liye **Dolo 650** le sakte ho:
+
+**Yahan se order karo:**
+
+1. **PharmEasy** – ₹35 – 2 hours delivery
+   https://pharmeasy.in/search/all?name=dolo-650
+
+2. **Netmeds** – ₹32 – Same day delivery  
+   https://www.netmeds.com/prescriptions?searchstring=dolo+650
+
+3. **Apollo Pharmacy** – ₹38 – 1-2 hours
+   https://www.apollopharmacy.in/search-medicines/dolo+650
+
+4. **1mg** – ₹36 – Next day delivery
+   https://www.1mg.com/search/all?name=dolo+650
+
+5. **MedPlus** – ₹34 – 3-4 hours
+   https://www.medplusmart.com/search?name=dolo+650
+
+**Kaise lena hai:**
+• 1 tablet har 6-8 ghante mein (max 3 tablets per day)
+• Khane ke baad lena better hai
+• Zyada pani piyo aur rest karo
+• Agar 3 din baad bhi fever rahe toh doctor ko dikhaao
+
+Link pe click karke direct order kar sakte ho! 🛒"""
+            return """Do you have fever? What's the temperature and since when? 🌡️
+
+You can take **Dolo 650**:
+
+**Order from these platforms:**
+
+1. **PharmEasy** – ₹35 – 2 hours delivery
+   https://pharmeasy.in/search/all?name=dolo-650
+
+2. **Netmeds** – ₹32 – Same day delivery
+   https://www.netmeds.com/prescriptions?searchstring=dolo+650
+
+3. **Apollo Pharmacy** – ₹38 – 1-2 hours
+   https://www.apollopharmacy.in/search-medicines/dolo+650
+
+4. **1mg** – ₹36 – Next day delivery
+   https://www.1mg.com/search/all?name=dolo+650
+
+5. **MedPlus** – ₹34 – 3-4 hours
+   https://www.medplusmart.com/search?name=dolo+650
+
+**Dosage:**
+• 1 tablet every 6-8 hours (max 3 per day)
+• Take after meals
+• Drink plenty of water and rest
+• If fever persists after 3 days, consult a doctor
+
+Click the link to order directly! 🛒"""
+        
+        elif 'headache' in message_lower or 'sir dard' in message_lower or 'sar dard' in message_lower:
+            if is_hindi:
+                return """Sir dard hai? Bahut zyada hai ya normal? 🤕
+
+**Disprin** ya **Paracetamol 500** le sakte ho:
+
+**Yahan se order karo:**
+
+1. **PharmEasy** – ₹15 – 2 hours
+   https://pharmeasy.in/search/all?name=disprin
+
+2. **Netmeds** – ₹14 – Same day  
+   https://www.netmeds.com/prescriptions?searchstring=disprin
+
+3. **Apollo Pharmacy** – ₹16 – 1-2 hours
+   https://www.apollopharmacy.in/search-medicines/disprin
+
+4. **1mg** – ₹15 – Next day
+   https://www.1mg.com/search/all?name=disprin
+
+5. **MedPlus** – ₹14 – 3-4 hours
+   https://www.medplusmart.com/search?name=disprin
+
+**Kaise lena hai:**
+• 1-2 tablets, pani mein dissolve karke
+• Khali pet mat lena
+• Agar severe headache hai toh doctor se consult karo
+
+Direct order link pe click karo! 🛒"""
+            return """Do you have headache? Is it severe or mild? 🤕
+
+**Disprin** or **Paracetamol 500** would help:
+
+**Order from:**
+
+1. **PharmEasy** – ₹15 – 2 hours
+   https://pharmeasy.in/search/all?name=disprin
+
+2. **Netmeds** – ₹14 – Same day
+   https://www.netmeds.com/prescriptions?searchstring=disprin
+
+3. **Apollo Pharmacy** – ₹16 – 1-2 hours
+   https://www.apollopharmacy.in/search-medicines/disprin
+
+4. **1mg** – ₹15 – Next day
+   https://www.1mg.com/search/all?name=disprin
+
+5. **MedPlus** – ₹14 – 3-4 hours
+   https://www.medplusmart.com/search?name=disprin
+
+**Dosage:**
+• 1-2 tablets dissolved in water
+• Don't take on empty stomach
+• If severe, consult a doctor
+
+Click to order directly! 🛒"""
+        
+        elif 'cold' in message_lower or 'cough' in message_lower or 'khansi' in message_lower or 'sardi' in message_lower:
+            if is_hindi:
+                return """Cold ya cough hai? Kab se hai? 🤧
+
+**Cetirizine 10mg** le sakte ho:
+
+**Yahan se order karo:**
+
+1. **PharmEasy** – ₹18 – 2 hours
+   https://pharmeasy.in/search/all?name=cetirizine-10mg
+
+2. **Netmeds** – ₹16 – Same day
+   https://www.netmeds.com/prescriptions?searchstring=cetirizine+10mg
+
+3. **Apollo Pharmacy** – ₹20 – 1-2 hours
+   https://www.apollopharmacy.in/search-medicines/cetirizine+10mg
+
+4. **1mg** – ₹17 – Next day
+   https://www.1mg.com/search/all?name=cetirizine+10mg
+
+5. **MedPlus** – ₹18 – 3-4 hours
+   https://www.medplusmart.com/search?name=cetirizine
+
+**Kaise lena hai:**
+• 1 tablet raat ko sone se pehle
+• Neend aa sakti hai, isliye drive mat karna
+• Garam pani piyo aur steam lelo
+
+Link pe click karo! 🛒"""
+            return """Do you have cold or cough? Since when? 🤧
+
+**Cetirizine 10mg** would help:
+
+**Order from:**
+
+1. **PharmEasy** – ₹18 – 2 hours
+   https://pharmeasy.in/search/all?name=cetirizine-10mg
+
+2. **Netmeds** – ₹16 – Same day
+   https://www.netmeds.com/prescriptions?searchstring=cetirizine+10mg
+
+3. **Apollo Pharmacy** – ₹20 – 1-2 hours
+   https://www.apollopharmacy.in/search-medicines/cetirizine+10mg
+
+4. **1mg** – ₹17 – Next day
+   https://www.1mg.com/search/all?name=cetirizine+10mg
+
+5. **MedPlus** – ₹18 – 3-4 hours
+   https://www.medplusmart.com/search?name=cetirizine
+
+**Dosage:**
+• 1 tablet at bedtime
+• May cause drowsiness, don't drive
+• Drink warm water and take steam
+
+Click to order! 🛒"""
+        
+        elif 'pet' in message_lower or 'stomach' in message_lower or 'acidity' in message_lower:
+            if is_hindi:
+                return """Pet mein problem hai? Dard hai ya acidity? 🤢
+
+**Digene** ya **Eno** lo:
+
+**Yahan se order karo:**
+
+1. **PharmEasy** – ₹22 – 2 hours
+   https://pharmeasy.in/search/all?name=digene
+
+2. **Netmeds** – ₹20 – Same day
+   https://www.netmeds.com/prescriptions?searchstring=digene
+
+3. **Apollo Pharmacy** – ₹24 – 1-2 hours
+   https://www.apollopharmacy.in/search-medicines/digene
+
+4. **1mg** – ₹21 – Next day
+   https://www.1mg.com/search/all?name=digene
+
+5. **MedPlus** – ₹23 – 3-4 hours
+   https://www.medplusmart.com/search?name=digene
+
+**Kaise lena hai:**
+• 2 tablets chew karke khana ke baad
+• Light khana khao
+• Agar pain zyada hai toh doctor se milna chahiye
+
+Direct order karo! 🛒"""
+            return """Stomach problem? Pain or acidity? 🤢
+
+**Digene** or **Eno** would help:
+
+**Order from:**
+
+1. **PharmEasy** – ₹22 – 2 hours
+   https://pharmeasy.in/search/all?name=digene
+
+2. **Netmeds** – ₹20 – Same day
+   https://www.netmeds.com/prescriptions?searchstring=digene
+
+3. **Apollo Pharmacy** – ₹24 – 1-2 hours
+   https://www.apollopharmacy.in/search-medicines/digene
+
+4. **1mg** – ₹21 – Next day
+   https://www.1mg.com/search/all?name=digene
+
+5. **MedPlus** – ₹23 – 3-4 hours
+   https://www.medplusmart.com/search?name=digene
+
+**Dosage:**
+• 2 tablets after meals (chewable)
+• Eat light food
+• If severe pain, consult doctor
+
+Order directly! 🛒"""
+        
+        # Generic symptom response
+        if is_hindi:
+            return """Aapko kya problem hai? Bataiye toh sahi medicine suggest kar sakta hoon. 
+
+Common problems:
+• Bukhar (Fever) 🌡️
+• Sir dard (Headache) 🤕  
+• Pet dard (Stomach ache) 🤢
+• Cold/Cough 🤧
+• Body pain 💪
+
+Detail mein bataiye!"""
+        return """What symptoms are you experiencing? Please tell me so I can suggest the right medicine.
+
+Common issues:
+• Fever 🌡️
+• Headache 🤕
+• Stomach ache 🤢  
+• Cold/Cough 🤧
+• Body pain 💪
+
+Please provide more details!"""
 
     def _build_response_system_prompt(self) -> str:
         """Build system prompt for generating conversational responses with language matching."""

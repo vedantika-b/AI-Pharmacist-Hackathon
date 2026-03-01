@@ -81,11 +81,24 @@ export default function AlertsPage() {
   const fetchAlerts = async () => {
     try {
       setLoading(true)
-      const data = await getRefillPredictions() as any
-      setAlerts(data)
+      const data = await getRefillPredictions().catch(err => {
+        console.error('Refill predictions API failed:', err)
+        throw err
+      }) as any
+      setAlerts(data || [])
+      // Clear any previous error notifications on success
+      if (notification?.type === 'error') {
+        setNotification(null)
+      }
     } catch (error) {
       console.error('Failed to fetch alerts:', error)
-      setNotification({ type: 'error', message: t('alertsLoadError', language) })
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      setNotification({ 
+        type: 'error', 
+        message: `${t('alertsLoadError', language)}: ${errorMessage}` 
+      })
+      // Set empty array on error so UI doesn't break
+      setAlerts([])
     } finally {
       setLoading(false)
     }
@@ -95,7 +108,10 @@ export default function AlertsPage() {
     try {
       setLoadingDetail(true)
       setDetailDialogOpen(true)
-      const detail = await getAlertDetail(alert.id) as any
+      const detail = await getAlertDetail(alert.id).catch(err => {
+        console.error('Alert detail API failed:', err)
+        throw err
+      }) as any
       setSelectedAlert(detail)
     } catch (error) {
       console.error('Failed to fetch alert detail:', error)

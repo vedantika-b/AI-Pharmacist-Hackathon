@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Pill, Eye, EyeOff, AlertCircle, Loader2, Sparkles } from "lucide-react"
+import { Pill, Eye, EyeOff, AlertCircle, Loader2, Sparkles, Shield } from "lucide-react"
 import Link from "next/link"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
@@ -26,6 +26,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [totpCode, setTotpCode] = useState("")
+  const [showQrHelp, setShowQrHelp] = useState(false)
   const router = useRouter()
   const { signIn, user, loading } = useAuth()
   const emailRef = useRef<HTMLInputElement>(null)
@@ -77,14 +78,16 @@ export default function LoginPage() {
       const result = await signIn(email, password, totpCode)
       
       if (result.requires_2fa) {
-        setError("Invalid 2FA code. Please try again.")
+        setError("Invalid 2FA code. Please check your authenticator app and try again.")
+        setTotpCode("")  // Clear the invalid code
         setIsLoading(false)
         return
       }
       
       router.push("/dashboard")
     } catch (err: any) {
-      setError(err.message || 'Invalid 2FA code. Please try again.')
+      setError(err.message || 'Invalid 2FA code. Please check your authenticator app and try again.')
+      setTotpCode("")  // Clear the invalid code
       setIsLoading(false)
     }
   }
@@ -97,8 +100,21 @@ export default function LoginPage() {
   const handleDemoLogin = async () => {
     setIsLoading(true)
     setError(null)
+    
+    // Store credentials for 2FA retry
+    setEmail(DEMO_CREDENTIALS.email)
+    setPassword(DEMO_CREDENTIALS.password)
+    
     try {
-      await signIn(DEMO_CREDENTIALS.email, DEMO_CREDENTIALS.password)
+      const result = await signIn(DEMO_CREDENTIALS.email, DEMO_CREDENTIALS.password)
+      
+      // Check if 2FA is required
+      if (result.requires_2fa) {
+        setRequires2FA(true)
+        setIsLoading(false)
+        return
+      }
+      
       router.push("/dashboard")
     } catch (err: any) {
       setError(err.message || 'Demo login failed. Please ensure the demo account exists.')
@@ -157,6 +173,11 @@ export default function LoginPage() {
                 )}
                 <div className="space-y-2">
                   <Label htmlFor="totpCode">Authentication Code</Label>
+                  <div className="flex justify-center items-center mb-4">
+                    <div className="p-3 rounded-full bg-primary/10">
+                      <Shield className="h-8 w-8 text-primary" />
+                    </div>
+                  </div>
                   <Input
                     id="totpCode"
                     name="totpCode"
@@ -179,6 +200,39 @@ export default function LoginPage() {
                     </p>
                   </div>
                 </div>
+                
+                {showQrHelp && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
+                    <p className="text-sm text-blue-900 dark:text-blue-100 font-semibold">
+                      Don't have Google Authenticator setup?
+                    </p>
+                    <div className="space-y-2">
+                      <p className="text-xs text-blue-800 dark:text-blue-200">
+                        <strong>Option 1:</strong> Create a new account to get QR code:
+                      </p>
+                      <Link href="/auth/signup">
+                        <Button 
+                          type="button"
+                          variant="default" 
+                          size="sm"
+                          className="w-full"
+                        >
+                          Create New Account with QR Code
+                        </Button>
+                      </Link>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-blue-800 dark:text-blue-200">
+                        <strong>Option 2:</strong> Setup Google Authenticator:
+                      </p>
+                      <ol className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside ml-2">
+                        <li>Download app from App Store/Play Store</li>
+                        <li>Create account to scan QR code</li>
+                        <li>Use 6-digit code to login here</li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
               </CardContent>
               <CardFooter className="flex flex-col space-y-4">
                 <Button
@@ -199,18 +253,28 @@ export default function LoginPage() {
                     </>
                   )}
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setRequires2FA(false)
-                    setTotpCode("")
-                    setError(null)
-                  }}
-                  size="sm"
-                >
-                  ← Back to Login
-                </Button>
+                <div className="flex flex-col gap-2 w-full">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowQrHelp(!showQrHelp)}
+                    className="w-full"
+                  >
+                    {showQrHelp ? "Hide Setup Instructions" : "Need to Setup Authenticator?"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setRequires2FA(false)
+                      setTotpCode("")
+                      setError(null)
+                      setShowQrHelp(false)
+                    }}
+                  >
+                    Back to Login
+                  </Button>
+                </div>
               </CardFooter>
             </form>
           ) : (

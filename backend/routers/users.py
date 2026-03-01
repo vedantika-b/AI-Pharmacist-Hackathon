@@ -51,7 +51,7 @@ async def get_user_profile(
     Get user profile and extended information.
     """
     try:
-        result = supabase.table("user_profiles").select("*").eq("user_id", user_id).single().execute()
+        result = supabase.table("user_profiles").select("*").eq("id", user_id).single().execute()
         
         if not result.data:
             raise HTTPException(
@@ -105,7 +105,7 @@ async def update_user_profile(
         if metadata:
             update_data["metadata"] = metadata
         
-        result = supabase.table("user_profiles").update(update_data).eq("user_id", user_id).execute()
+        result = supabase.table("user_profiles").update(update_data).eq("id", user_id).execute()
         
         if not result.data:
             raise HTTPException(
@@ -135,7 +135,13 @@ async def get_notification_preferences(
     Get user notification preferences.
     """
     try:
-        result = supabase.table("user_profiles").select("metadata").eq("user_id", user_id).single().execute()
+        # Try to get user profile, return defaults if not found
+        try:
+            result = supabase.table("user_profiles").select("metadata").eq("id", user_id).single().execute()
+        except Exception as db_error:
+            # If user not found, return default preferences
+            logger.info(f"User profile not found for {user_id}, returning defaults")
+            return UserNotificationPreferences()
         
         if not result.data:
             # Return defaults if user not found
@@ -163,7 +169,7 @@ async def update_notification_preferences(
     """
     try:
         # Get current metadata and update notification preferences
-        result = supabase.table("user_profiles").select("metadata").eq("user_id", user_id).single().execute()
+        result = supabase.table("user_profiles").select("metadata").eq("id", user_id).single().execute()
         
         if not result.data:
             raise HTTPException(
@@ -174,7 +180,7 @@ async def update_notification_preferences(
         metadata = result.data.get("metadata", {})
         metadata["notification_preferences"] = preferences.dict()
         
-        update_result = supabase.table("user_profiles").update({"metadata": metadata}).eq("user_id", user_id).execute()
+        update_result = supabase.table("user_profiles").update({"metadata": metadata}).eq("id", user_id).execute()
         
         logger.info(f"Updated notification preferences for user {user_id}")
         return {"success": True, "preferences": preferences.dict()}
@@ -198,7 +204,7 @@ async def get_health_profile(
     Get user health profile information (allergies, conditions, medications).
     """
     try:
-        result = supabase.table("user_profiles").select("metadata").eq("user_id", user_id).single().execute()
+        result = supabase.table("user_profiles").select("metadata").eq("id", user_id).single().execute()
         
         if not result.data:
             raise HTTPException(
@@ -237,7 +243,7 @@ async def update_health_profile(
     """
     try:
         # Get current metadata
-        result = supabase.table("user_profiles").select("metadata").eq("user_id", user_id).single().execute()
+        result = supabase.table("user_profiles").select("metadata").eq("id", user_id).single().execute()
         
         if not result.data:
             raise HTTPException(
@@ -252,7 +258,7 @@ async def update_health_profile(
         if chronic_conditions is not None:
             metadata["chronic_conditions"] = chronic_conditions
         
-        update_result = supabase.table("user_profiles").update({"metadata": metadata}).eq("user_id", user_id).execute()
+        update_result = supabase.table("user_profiles").update({"metadata": metadata}).eq("id", user_id).execute()
         
         logger.info(f"Updated health profile for user {user_id}")
         return {"success": True, "allergies": metadata.get("allergies"), "chronic_conditions": metadata.get("chronic_conditions")}

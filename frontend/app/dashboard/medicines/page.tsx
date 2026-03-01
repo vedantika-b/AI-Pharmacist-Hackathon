@@ -64,14 +64,22 @@ export default function MedicinesPage() {
       const allText = t('all', language)
       if (category && category !== allText) params.category = category
       
-      const data = await getProducts(params) as any
-      setMedicines(data)
+      const data = await getProducts(params).catch(err => {
+        console.error('Products API failed:', err)
+        throw err
+      }) as any
+      setMedicines(data || [])
       
       // Extract unique categories
-      const uniqueCategories = [allText, ...new Set(data.map((m: Medicine) => m.category).filter(Boolean))]
+      const uniqueCategories = [allText, ...new Set((data || []).map((m: Medicine) => m.category).filter(Boolean))]
       setCategories(uniqueCategories as string[])
     } catch (error) {
       console.error('Failed to fetch medicines:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      // Show user-friendly error - you could add a toast notification here
+      console.warn('Unable to load medicines:', errorMessage)
+      // Set empty array on error so UI doesn't break
+      setMedicines([])
     } finally {
       setLoading(false)
     }

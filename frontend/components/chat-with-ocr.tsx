@@ -6,6 +6,7 @@ import { Send, Upload, Loader2, AlertCircle, CheckCircle, Image as ImageIcon, X 
 import { useLanguage } from "@/contexts/LanguageContext"
 import { useAuth } from "@/contexts/AuthContext"
 import { t } from "@/lib/translations"
+import { sendChatMessage } from "@/lib/api"
 
 interface Message {
   type: "user" | "bot"
@@ -105,41 +106,38 @@ export default function ChatWithOCR() {
         ])
       }
 
-      // Send to backend
-      const response = await fetch("http://localhost:8000/api/v1/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: inputText || "Please analyze this prescription",
-          user_id: user?.id,
-          image_base64: imageBase64,
-        }),
-      })
+      // Send to backend using API client with retry logic
+      try {
+        const data = await sendChatMessage(
+          inputText || "Please analyze this prescription",
+          user?.id,
+          imageBase64,
+          undefined // sessionId
+        ) as any
 
-      if (!response.ok) {
-        throw new Error("Failed to send message")
+        // Add bot response
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: "bot",
+            text: data.response,
+            timestamp: new Date(),
+            medications: data.medications,
+            ocrData: data.ocr_data,
+          },
+        ])
+
+        // Clear inputs and image
+        setInputText("")
+        setSelectedImage(null)
+        setImagePreview(null)
+      } catch (apiError) {
+        throw new Error(
+          apiError instanceof Error 
+            ? apiError.message 
+            : "Failed to connect to chat service"
+        )
       }
-
-      const data = await response.json()
-
-      // Add bot response
-      setMessages((prev) => [
-        ...prev,
-        {
-          type: "bot",
-          text: data.response,
-          timestamp: new Date(),
-          medications: data.medications,
-          ocrData: data.ocr_data,
-        },
-      ])
-
-      // Clear inputs and image
-      setInputText("")
-      setSelectedImage(null)
-      setImagePreview(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message")
       console.error("Chat error:", err)
