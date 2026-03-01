@@ -8,6 +8,11 @@ from typing import Optional
 from datetime import datetime, timedelta
 import bcrypt
 import jwt
+import pyotp
+import qrcode
+import io
+import base64
+import random
 from supabase import Client
 from core.database import get_supabase_client
 from core.config import get_settings
@@ -22,12 +27,15 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 SECRET_KEY = settings.jwt_secret_key if hasattr(settings, 'jwt_secret_key') else "your-secret-key-change-this-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+OTP_EXPIRE_MINUTES = 5
 
 
 class LoginRequest(BaseModel):
     """Login request model."""
     email: EmailStr
     password: str
+    totp_code: Optional[str] = None
+    otp_code: Optional[str] = None
 
 
 class SignupRequest(BaseModel):
@@ -35,6 +43,19 @@ class SignupRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    phone_number: Optional[str] = None
+
+
+class SendOTPRequest(BaseModel):
+    """Send OTP request model."""
+    phone_number: str
+    email: Optional[EmailStr] = None
+
+
+class VerifyOTPRequest(BaseModel):
+    """Verify OTP request model."""
+    phone_number: str
+    otp_code: str
 
 
 class AuthResponse(BaseModel):
@@ -42,6 +63,18 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str
     user: dict
+    requires_2fa: Optional[bool] = False
+    qr_code: Optional[str] = None
+    requires_otp: Optional[bool] = False
+    otp_sent: Optional[bool] = False
+    otp_code_demo: Optional[str] = None  # For demo purposes only
+
+
+class OTPResponse(BaseModel):
+    """OTP response model."""
+    success: bool
+    message: str
+    otp_code_demo: Optional[str] = None  # For demo - in production, remove this
 
 
 class PasswordResetRequest(BaseModel):
@@ -80,15 +113,209 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
+def generate_totp_secret() -> str:
+    """Generate a new TOTP secret."""
+    return pyotp.random_base32()
+
+
+def generate_qr_code(email: str, secret: str, issuer: str = "AI Pharmacist") -> str:
+    """Generate QR code URL for Google Authenticator."""
+    # Create TOTP URI
+    totp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
+        name=email,
+        issuer_name=issuer
+    )
+    
+    # Generate QR code
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(totp_uri)
+    qr.make(fit=True)
+    
+    # Create image
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert to base64
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    return f"data:image/png;base64,{img_str}"
+
+
+def verify_totp(secret: str, code: str) -> bool:
+    """Verify a TOTP code."""
+    try:
+        totp = pyotp.TOTP(secret)
+        return totp.verify(code, valid_window=1)  # Allow 1 window before/after for clock drift
+    except Exception as e:
+        logger.error(f"TOTP verification error: {e}")
+        return False
+
+
+def generate_otp() -> str:
+    """Generate a 6-digit OTP code."""
+    return str(random.randint(100000, 999999))
+
+
+def send_sms_otp(phone_number: str, otp_code: str) -> bool:
+    """
+    Send OTP via SMS.
+    
+    NOTE: This is a DEMO implementation. In production:
+    - Use Twilio, AWS SNS, or similar SMS service
+    - Do NOT return the OTP code in response
+    
+    For demo purposes, we'll just log the OTP and return success.
+    """
+    # Clean phone number
+    clean_number = phone_number.replace(" ", "").replace("-", "")
+    
+    # In production, integrate with SMS service here:
+    # Example with Twilio:
+    # from twilio.rest import Client
+    # client = Client(account_sid, auth_token)
+    # message = client.messages.create(
+    #     body=f"Your AI Pharmacist OTP is: {otp_code}. Valid for 5 minutes.",
+    #     from_='+1234567890',
+    #     to=clean_number
+    # )
+    
+    # For demo, just log it
+    logger.info(f"📱 OTP {otp_code} would be sent to {clean_number}")
+    print(f"\n{'='*50}")
+    print(f"📱 SMS OTP DEMO")
+    print(f"Phone: {clean_number}")
+    print(f"OTP Code: {otp_code}")
+    print(f"Valid for: 5 minutes")
+    print(f"{'='*50}\n")
+    
+    return True
+
+
+@router.post("/send-otp", response_model=OTPResponse)
+async def send_otp(
+    request: SendOTPRequest,
+    supabase: Client = Depends(get_supabase_client)
+):
+    """
+    Send OTP to phone number.
+    
+    For demo purposes, returns the OTP code. In production, remove this!
+    """
+    try:
+        # Generate OTP
+        otp_code = generate_otp()
+        otp_expires = datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)
+        
+        # Check if user exists with this phone number
+        if request.email:
+            # Update existing user's OTP
+            result = supabase.table("users").update({
+                "otp_code": otp_code,
+                "otp_expires_at": otp_expires.isoformat()
+            }).eq("email", request.email).execute()
+        else:
+            # Store OTP for phone number (for login)
+            result = supabase.table("users").update({
+                "otp_code": otp_code,
+                "otp_expires_at": otp_expires.isoformat()
+            }).eq("phone_number", request.phone_number).execute()
+        
+        # Send SMS (demo mode)
+        send_sms_otp(request.phone_number, otp_code)
+        
+        logger.info(f"OTP sent to {request.phone_number}")
+        
+        return OTPResponse(
+            success=True,
+            message=f"OTP sent to {request.phone_number}",
+            otp_code_demo=otp_code  # REMOVE IN PRODUCTION
+        )
+        
+    except Exception as e:
+        logger.error(f"Send OTP error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send OTP"
+        )
+
+
+@router.post("/verify-otp", response_model=OTPResponse)
+async def verify_otp_endpoint(
+    request: VerifyOTPRequest,
+    supabase: Client = Depends(get_supabase_client)
+):
+    """
+    Verify OTP code for phone number.
+    """
+    try:
+        # Get user with this phone number
+        result = supabase.table("users").select("*").eq("phone_number", request.phone_number).execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Phone number not found"
+            )
+        
+        user = result.data[0]
+        stored_otp = user.get("otp_code")
+        otp_expires = user.get("otp_expires_at")
+        
+        if not stored_otp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No OTP was sent to this number"
+            )
+        
+        # Check expiration
+        if otp_expires:
+            expires_dt = datetime.fromisoformat(otp_expires.replace('Z', '+00:00'))
+            if datetime.utcnow().replace(tzinfo=expires_dt.tzinfo) > expires_dt:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="OTP has expired. Please request a new one."
+                )
+        
+        # Verify OTP
+        if stored_otp != request.otp_code:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid OTP code"
+            )
+        
+        # Clear OTP after successful verification
+        supabase.table("users").update({
+            "otp_code": None,
+            "otp_expires_at": None
+        }).eq("phone_number", request.phone_number).execute()
+        
+        logger.info(f"OTP verified successfully for {request.phone_number}")
+        
+        return OTPResponse(
+            success=True,
+            message="OTP verified successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Verify OTP error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify OTP"
+        )
+
+
 @router.post("/login", response_model=AuthResponse)
 async def login(
     credentials: LoginRequest,
     supabase: Client = Depends(get_supabase_client)
 ):
     """
-    Login with email and password.
+    Login with email, password, and optional 2FA TOTP code.
     
-    Returns JWT token and user information.
+    Returns JWT token and user information after successful authentication.
     """
     try:
         # Query user from database
@@ -121,12 +348,49 @@ async def login(
                 detail="Invalid email or password"
             )
         
-        # Create access token
+        # Check if user has 2FA enabled
+        totp_secret = user.get("totp_secret")
+        
+        if totp_secret:
+            # User has 2FA enabled
+            if not credentials.totp_code:
+                # Password is correct but need 2FA code
+                logger.info(f"Password verified for {credentials.email}, awaiting 2FA code")
+                return AuthResponse(
+                    access_token="",  # No token yet, needs 2FA
+                    token_type="bearer",
+                    user={
+                        "id": user.get("id"),
+                        "email": user.get("email"),
+                        "full_name": user.get("full_name", "")
+                    },
+                    requires_2fa=True
+                )
+            
+            # Verify TOTP code
+            if not verify_totp(totp_secret, credentials.totp_code):
+                logger.warning(f"Invalid 2FA code attempt for user: {credentials.email}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid 2FA code"
+                )
+            
+            logger.info(f"2FA verification successful for user: {credentials.email}")
+        
+        # Create access token (both password and 2FA verified)
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"sub": user.get("id"), "email": user.get("email")},
             expires_delta=access_token_expires
         )
+        
+        # Update last login timestamp
+        try:
+            supabase.table("users").update({
+                "last_login_at": datetime.utcnow().isoformat()
+            }).eq("id", user.get("id")).execute()
+        except Exception as update_error:
+            logger.warning(f"Failed to update last_login_at: {update_error}")
         
         # Log successful login
         logger.info(f"Successful login for user: {credentials.email}")
@@ -140,7 +404,8 @@ async def login(
                 "email": user.get("email"),
                 "full_name": user.get("full_name", ""),
                 "created_at": user.get("created_at")
-            }
+            },
+            requires_2fa=False
         )
     
     except HTTPException:
@@ -159,9 +424,10 @@ async def signup(
     supabase: Client = Depends(get_supabase_client)
 ):
     """
-    Create a new user account.
+    Create a new user account with 2FA enabled and phone OTP support.
     
-    Hashes password with bcrypt and stores user in database.
+    Generates TOTP secret and QR code for Google Authenticator.
+    Also supports phone number OTP verification.
     """
     try:
         # Check if user already exists
@@ -173,14 +439,37 @@ async def signup(
                 detail="Email already registered"
             )
         
+        # Check if phone number is already registered
+        if user_data.phone_number:
+            phone_existing = supabase.table("users").select("phone_number").eq("phone_number", user_data.phone_number).execute()
+            if phone_existing.data and len(phone_existing.data) > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Phone number already registered"
+                )
+        
         # Hash password
         password_hash = hash_password(user_data.password)
+        
+        # Generate TOTP secret for 2FA
+        totp_secret = generate_totp_secret()
+        
+        # Generate OTP for phone verification if phone number provided
+        otp_code = None
+        otp_expires = None
+        if user_data.phone_number:
+            otp_code = generate_otp()
+            otp_expires = datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)
         
         # Create user record
         new_user = {
             "email": user_data.email,
             "password_hash": password_hash,
             "full_name": user_data.full_name,
+            "totp_secret": totp_secret,
+            "phone_number": user_data.phone_number,
+            "otp_code": otp_code,
+            "otp_expires_at": otp_expires.isoformat() if otp_expires else None,
             "created_at": datetime.utcnow().isoformat()
         }
         
@@ -194,6 +483,13 @@ async def signup(
         
         created_user = result.data[0]
         user_id = created_user.get("id")
+        
+        # Send OTP if phone number provided
+        if user_data.phone_number and otp_code:
+            send_sms_otp(user_data.phone_number, otp_code)
+        
+        # Generate QR code for Google Authenticator
+        qr_code = generate_qr_code(user_data.email, totp_secret)
         
         # Also create user_profile entry for application compatibility
         try:
@@ -209,14 +505,14 @@ async def signup(
             # Log but don't fail signup if profile creation fails
             logger.warning(f"Failed to create user_profile: {profile_error}")
         
-        # Create access token
+        # Create access token (temporary, still needs 2FA verification)
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": user_id, "email": created_user.get("email")},
+            data={"sub": user_id, "email": created_user.get("email"), "requires_2fa": True},
             expires_delta=access_token_expires
         )
         
-        logger.info(f"New user created: {user_data.email}")
+        logger.info(f"New user created with 2FA: {user_data.email}")
         
         return AuthResponse(
             access_token=access_token,
@@ -225,8 +521,14 @@ async def signup(
                 "id": user_id,
                 "email": created_user.get("email"),
                 "full_name": created_user.get("full_name", ""),
+                "phone_number": created_user.get("phone_number"),
                 "created_at": created_user.get("created_at")
-            }
+            },
+            requires_2fa=True,
+            qr_code=qr_code,
+            requires_otp=bool(user_data.phone_number),
+            otp_sent=bool(user_data.phone_number),
+            otp_code_demo=otp_code if user_data.phone_number else None  # REMOVE IN PRODUCTION
         )
     
     except HTTPException:

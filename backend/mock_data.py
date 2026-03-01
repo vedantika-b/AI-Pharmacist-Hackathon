@@ -19,6 +19,7 @@ MOCK_MEDICINES: List[Dict] = [
         "price": 2.50,
         "prescription_required": False,
         "is_active": True,
+        "description": "Used for pain relief, fever reduction, and inflammation."
     },
     {
         "id": "2",
@@ -32,6 +33,7 @@ MOCK_MEDICINES: List[Dict] = [
         "price": 3.75,
         "prescription_required": False,
         "is_active": True,
+        "description": "Nonsteroidal anti-inflammatory drug for pain and fever."
     },
     {
         "id": "3",
@@ -45,6 +47,7 @@ MOCK_MEDICINES: List[Dict] = [
         "price": 5.50,
         "prescription_required": True,
         "is_active": True,
+        "description": "Antibiotic used to treat bacterial infections."
     },
     {
         "id": "4",
@@ -58,6 +61,7 @@ MOCK_MEDICINES: List[Dict] = [
         "price": 4.25,
         "prescription_required": True,
         "is_active": True,
+        "description": "Helps control blood sugar levels in type 2 diabetes."
     },
     {
         "id": "5",
@@ -71,6 +75,105 @@ MOCK_MEDICINES: List[Dict] = [
         "price": 6.00,
         "prescription_required": True,
         "is_active": True,
+        "description": "ACE inhibitor for treating high blood pressure."
+    },
+    {
+        "id": "6",
+        "name": "Omeprazole",
+        "generic_name": "Omeprazole",
+        "brand_name": "Prilosec",
+        "dosage_form": "Capsule",
+        "strength": "20mg",
+        "category": "Gastrointestinal",
+        "stock_quantity": 180,
+        "price": 8.50,
+        "prescription_required": False,
+        "is_active": True,
+        "description": "Proton pump inhibitor for treating acid reflux and heartburn."
+    },
+    {
+        "id": "7",
+        "name": "Atorvastatin",
+        "generic_name": "Atorvastatin",
+        "brand_name": "Lipitor",
+        "dosage_form": "Tablet",
+        "strength": "20mg",
+        "category": "Cardiovascular",
+        "stock_quantity": 250,
+        "price": 12.00,
+        "prescription_required": True,
+        "is_active": True,
+        "description": "Statin medication to lower cholesterol levels."
+    },
+    {
+        "id": "8",
+        "name": "Cetirizine",
+        "generic_name": "Cetirizine",
+        "brand_name": "Zyrtec",
+        "dosage_form": "Tablet",
+        "strength": "10mg",
+        "category": "Allergy",
+        "stock_quantity": 160,
+        "price": 6.75,
+        "prescription_required": False,
+        "is_active": True,
+        "description": "Antihistamine for treating allergies and hay fever."
+    },
+    {
+        "id": "9",
+        "name": "Levothyroxine",
+        "generic_name": "Levothyroxine",
+        "brand_name": "Synthroid",
+        "dosage_form": "Tablet",
+        "strength": "50mcg",
+        "category": "Endocrine",
+        "stock_quantity": 200,
+        "price": 9.25,
+        "prescription_required": True,
+        "is_active": True,
+        "description": "Thyroid hormone replacement for hypothyroidism."
+    },
+    {
+        "id": "10",
+        "name": "Vitamin D3",
+        "generic_name": "Cholecalciferol",
+        "brand_name": "Vitamin D3",
+        "dosage_form": "Softgel",
+        "strength": "1000IU",
+        "category": "Supplements",
+        "stock_quantity": 500,
+        "price": 4.99,
+        "prescription_required": False,
+        "is_active": True,
+        "description": "Vitamin supplement for bone health and immune support."
+    },
+    {
+        "id": "11",
+        "name": "Azithromycin",
+        "generic_name": "Azithromycin",
+        "brand_name": "Zithromax",
+        "dosage_form": "Tablet",
+        "strength": "250mg",
+        "category": "Antibiotics",
+        "stock_quantity": 90,
+        "price": 18.50,
+        "prescription_required": True,
+        "is_active": True,
+        "description": "Broad-spectrum antibiotic for various bacterial infections."
+    },
+    {
+        "id": "12",
+        "name": "Acetaminophen",
+        "generic_name": "Acetaminophen",
+        "brand_name": "Tylenol",
+        "dosage_form": "Tablet",
+        "strength": "500mg",
+        "category": "Pain Relief",
+        "stock_quantity": 350,
+        "price": 7.99,
+        "prescription_required": False,
+        "is_active": True,
+        "description": "Pain reliever and fever reducer."
     },
 ]
 

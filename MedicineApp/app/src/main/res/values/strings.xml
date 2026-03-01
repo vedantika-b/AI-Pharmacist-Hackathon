@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MedicineApp</string>
+    
+    <!-- Login Screen -->
+    <string name="login_title">Medicine App</string>
+    <string name="email_hint">Email</string>
+    <string name="password_hint">Password</string>
+    <string name="login_button">Login</string>
+    <string name="email_required">Email is required</string>
+    <string name="email_invalid">Invalid email format</string>
+    <string name="password_required">Password is required</string>
+    <string name="password_invalid">Password must be at least 6 characters</string>
+    <string name="login_success">Login successful!</string>
+    
+    <!-- Dashboard -->
+    <string name="welcome_message">Welcome, %1$s!</string>
+    <string name="total_medicines">Total Medicines</string>
+    <string name="my_medicines">My Medicines</string>
+    <string name="empty_state">No medicines added yet.\nTap the + button to add your first medicine.</string>
+    <string name="add_medicine">Add Medicine</string>
+    <string name="toggle_theme">Toggle Theme</string>
+    <string name="logout">Logout</string>
+    
+    <!-- Add/Edit Medicine -->
+    <string name="add_medicine_title">Add Medicine</string>
+    <string name="edit_medicine_title">Edit Medicine</string>
+    <string name="medicine_name">Medicine Name</string>
+    <string name="select_time">Select Time</string>
+    <string name="pick_time">Pick Time</string>
+    <string name="no_time_selected">No time selected</string>
+    <string name="save_medicine">Save Medicine</string>
+    <string name="update_medicine">Update Medicine</string>
+    <string name="medicine_name_required">Medicine name is required (min 2 characters)</string>
+    <string name="select_time_required">Please select time</string>
+    <string name="medicine_added">Medicine added successfully</string>
+    <string name="medicine_updated">Medicine updated successfully</string>
+    <string name="medicine_deleted">Medicine deleted</string>
+    
+    <!-- General -->
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="time_format">Time: %1$s</string>
+</resources>

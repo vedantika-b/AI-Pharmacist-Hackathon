@@ -22,7 +22,7 @@ async def get_products(
     category: Optional[str] = Query(default=None, description="Filter by category"),
     prescription_required: Optional[bool] = Query(default=None, description="Filter by prescription requirement"),
     in_stock: bool = Query(default=True, description="Show only in-stock items"),
-    limit: int = Query(default=50, ge=1, le=200, description="Maximum results"),
+    limit: int = Query(default=1000, ge=1, le=10000, description="Maximum results"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
     supabase: Client = Depends(get_supabase_client)
 ):

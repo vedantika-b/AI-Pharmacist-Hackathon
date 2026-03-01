@@ -14,12 +14,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Search, Filter, ShoppingCart, Pill, Info, Loader2 } from "lucide-react"
+import { Search, Filter, Pill, Info, Loader2, TrendingDown } from "lucide-react"
 import { getProducts } from "@/lib/api"
 import { debounce } from "@/lib/utils"
 import type { Medicine } from "@/lib/types"
 import { useLanguage } from "@/contexts/LanguageContext"
 import { t } from "@/lib/translations"
+import { useRouter } from "next/navigation"
+import PharmacyComparisonModal from "@/components/pharmacy/PharmacyComparisonModal"
 
 const container = {
   hidden: { opacity: 0 },
@@ -38,12 +40,14 @@ const item = {
 
 export default function MedicinesPage() {
   const { language } = useLanguage()
+  const router = useRouter()
   const [medicines, setMedicines] = useState<Medicine[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState(t('all', language))
-  const [cart, setCart] = useState<string[]>([])
   const [categories, setCategories] = useState<string[]>([t('all', language)])
+  const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null)
+  const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false)
 
   // Fetch medicines
   useEffect(() => {
@@ -53,7 +57,9 @@ export default function MedicinesPage() {
   const fetchMedicines = async (search?: string, category?: string) => {
     try {
       setLoading(true)
-      const params: any = {}
+      const params: any = {
+        limit: 1000  // Fetch all medicines
+      }
       if (search) params.search = search
       const allText = t('all', language)
       if (category && category !== allText) params.category = category
@@ -89,12 +95,9 @@ export default function MedicinesPage() {
     fetchMedicines(searchQuery || undefined, category !== allText ? category : undefined)
   }
 
-  const addToCart = (medicineId: string) => {
-    setCart(prev => [...prev, medicineId])
-    // Simulate temporary feedback
-    setTimeout(() => {
-      setCart(prev => prev.filter(id => id !== medicineId))
-    }, 2000)
+  const handleViewPrices = (medicine: Medicine) => {
+    setSelectedMedicine(medicine)
+    setIsComparisonModalOpen(true)
   }
 
   const formatCurrency = (price: number) => {
@@ -147,11 +150,6 @@ export default function MedicinesPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <Button variant="outline" className="h-12 w-full md:w-auto">
-              <ShoppingCart className="mr-2 h-5 w-5" />
-              {t('cart', language)} ({cart.length})
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -238,18 +236,12 @@ export default function MedicinesPage() {
                       </Button>
                     </div>
                     <Button
-                      onClick={() => addToCart(medicine.id)}
-                      disabled={medicine.stock_quantity <= 0 || cart.includes(medicine.id)}
+                      onClick={() => handleViewPrices(medicine)}
+                      disabled={medicine.stock_quantity <= 0}
                       className="w-full"
                     >
-                      {cart.includes(medicine.id) ? (
-                        t('addedToCart', language)
-                      ) : (
-                        <>
-                          <ShoppingCart className="mr-2 h-4 w-4" />
-                          {t('addToCart', language)}
-                        </>
-                      )}
+                      <TrendingDown className="mr-2 h-4 w-4" />
+                      Compare Prices & Buy
                     </Button>
                   </div>
                 </CardContent>
@@ -271,6 +263,13 @@ export default function MedicinesPage() {
           </div>
         </Card>
       )}
+
+      {/* Pharmacy Comparison Modal */}
+      <PharmacyComparisonModal
+        medicine={selectedMedicine}
+        open={isComparisonModalOpen}
+        onOpenChange={setIsComparisonModalOpen}
+      />
     </div>
   )
 }

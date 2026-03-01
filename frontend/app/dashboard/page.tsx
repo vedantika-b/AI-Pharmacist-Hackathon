@@ -103,9 +103,9 @@ export default function DashboardPage() {
 
   const translateInsightCategory = (category: string): string => {
     const categoryMap: Record<string, string> = {
-      'Stock Alert': t('stockAlert', language),
-      'Refill Predictions': t('refillPredictions', language),
-      'High Demand': t('highDemand', language),
+      'Stock Alert': 'Stock Alert',
+      'Refill Predictions': 'Refill Predictions',
+      'High Demand': 'High Demand',
     }
     return categoryMap[category] || category
   }
@@ -115,19 +115,19 @@ export default function DashboardPage() {
     if (message.includes('medicines running low')) {
       const match = message.match(/(\d+)\s+medicines running low/)
       if (match) {
-        return `${match[1]} ${t('medicinesRunningLow', language)}`
+        return `${match[1]} medicines running low`
       }
     }
     if (message.includes('patients need refills')) {
       const match = message.match(/(\d+)\s+patients need refills/)
       if (match) {
-        return `${match[1]} ${t('patientsNeedRefills', language)}`
+        return `${match[1]} patients need refills`
       }
     }
     if (message.includes('showing') && message.includes('increase')) {
       const match = message.match(/(\w+)\s+showing\s+(\d+)%\s+increase/)
       if (match) {
-        return `${match[1]} ${t('showingIncrease', language)}`
+        return message
       }
     }
     return message
@@ -161,7 +161,7 @@ export default function DashboardPage() {
           </p>
         </div>
         {/* Decorative Elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -z-0" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl z-0" />
       </motion.div>
 
       {/* Stats Grid */}
@@ -201,11 +201,11 @@ export default function DashboardPage() {
         <Card className="hover:shadow-xl transition-all duration-300 border-2 hover:border-primary/30 rounded-2xl">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2 text-xl">
-              <Activity className="h-5 w-5 text-primary" />
-              {t('recentOrders', language) || "Recent Orders"}
+              <Bell className="h-5 w-5 text-primary" />
+              Recent Updates
             </CardTitle>
             <CardDescription>
-              {t('latestOrders', language)}
+              Latest activities in your pharmacy
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -213,7 +213,7 @@ export default function DashboardPage() {
               <div className="text-center py-12">
                 <Pill className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
                 <p className="text-sm text-muted-foreground">
-                  {t('noRecentOrders', language) || "No recent orders"}
+                  No recent activity
                 </p>
               </div>
             ) : (
@@ -224,24 +224,47 @@ export default function DashboardPage() {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="flex items-center justify-between p-4 rounded-xl hover:bg-muted/50 transition-all duration-300 border border-transparent hover:border-primary/20 hover:shadow-md cursor-pointer"
+                    className="flex items-start gap-3 p-4 rounded-xl hover:bg-muted/50 transition-all duration-300 border border-transparent hover:border-primary/20 hover:shadow-md cursor-pointer"
                   >
-                    <div className="space-y-1 flex-1">
-                      <p className="text-sm font-semibold">Order #{order.id}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-2">
-                        <span>{order.item_count} {order.item_count !== 1 ? t('items', language) : t('item', language)}</span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          order.status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                          'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                        }`}>
-                          {t(order.status as any, language) || order.status}
-                        </span>
-                      </p>
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
+                      order.status === 'completed' ? 'bg-emerald-100 dark:bg-emerald-900/30' :
+                      order.status === 'pending' ? 'bg-amber-100 dark:bg-amber-900/30' :
+                      'bg-blue-100 dark:bg-blue-900/30'
+                    }`}>
+                      <Activity className={`h-5 w-5 ${
+                        order.status === 'completed' ? 'text-emerald-600 dark:text-emerald-400' :
+                        order.status === 'pending' ? 'text-amber-600 dark:text-amber-400' :
+                        'text-blue-600 dark:text-blue-400'
+                      }`} />
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-primary">{formatCurrency(order.total_amount)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(order.created_at).toLocaleDateString()}
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">
+                            {order.status === 'completed' ? 'Order Completed' :
+                             order.status === 'pending' ? 'New Order Received' :
+                             'Order Processing'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Order #{order.id} • {order.item_count} {order.item_count !== 1 ? 'items' : 'item'}
+                          </p>
+                        </div>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                          order.status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                          order.status === 'pending' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                          'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        }`}>
+                          {formatCurrency(order.total_amount)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <span>•</span>
+                        <span>{new Date(order.created_at).toLocaleString('en-IN', { 
+                          day: 'numeric', 
+                          month: 'short', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}</span>
                       </p>
                     </div>
                   </motion.div>
@@ -278,9 +301,9 @@ export default function DashboardPage() {
                     className={`p-4 rounded-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer border-2 ${getInsightColor(insight.color)}`}
                   >
                     <div className="flex items-start gap-3">
-                      {insight.type === 'alert' && <AlertTriangle className="h-5 w-5 mt-0.5 text-blue-500 flex-shrink-0" />}
-                      {insight.type === 'suggestion' && <TrendingUp className="h-5 w-5 mt-0.5 text-green-500 flex-shrink-0" />}
-                      {insight.type === 'warning' && <Bell className="h-5 w-5 mt-0.5 text-yellow-500 flex-shrink-0" />}
+                      {insight.type === 'alert' && <AlertTriangle className="h-5 w-5 mt-0.5 text-blue-500 shrink-0" />}
+                      {insight.type === 'suggestion' && <TrendingUp className="h-5 w-5 mt-0.5 text-green-500 shrink-0" />}
+                      {insight.type === 'warning' && <Bell className="h-5 w-5 mt-0.5 text-yellow-500 shrink-0" />}
                       <div className="flex-1">
                         <p className="text-sm font-semibold mb-1">
                           {translateInsightCategory(insight.category)}

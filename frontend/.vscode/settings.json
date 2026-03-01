@@ -1,0 +1,22 @@
+{
+  "tailwindCSS.lint.cssConflict": "warning",
+  "tailwindCSS.lint.invalidApply": "error",
+  "tailwindCSS.lint.invalidConfigPath": "error",
+  "tailwindCSS.lint.invalidScreen": "error",
+  "tailwindCSS.lint.invalidTailwindDirective": "error",
+  "tailwindCSS.lint.invalidVariant": "error",
+  "tailwindCSS.lint.recommendedVariantOrder": "warning",
+  
+  // Disable the INCORRECT gradient canonical class suggestions
+  "tailwindCSS.experimental.classRegex": [],
+  "css.lint.validProperties": [
+    "bg-gradient-to-r",
+    "bg-gradient-to-br",
+    "bg-gradient-to-bl",
+    "bg-gradient-to-tr",
+    "bg-gradient-to-tl",
+    "bg-gradient-to-b",
+    "bg-gradient-to-t",
+    "bg-gradient-to-l"
+  ]
+}

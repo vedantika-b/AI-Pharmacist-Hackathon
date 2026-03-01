@@ -18,13 +18,14 @@ interface User {
   id: string;
   email: string;
   name?: string;
+  phone_number?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  signIn: (email: string, password: string, totpCode?: string) => Promise<{ requires_2fa?: boolean }>;
+  signUp: (email: string, password: string, fullName: string, phoneNumber?: string) => Promise<{ qr_code?: string; requires_2fa?: boolean; otp_sent?: boolean; otp_code_demo?: string }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
@@ -109,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, totpCode?: string) => {
     // Check for demo credentials first (works offline)
     if (email === DEMO_USER.email && password === DEMO_USER.password) {
       const demoUser = {
@@ -119,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(demoUser));
       setUser(demoUser);
-      return;
+      return {};
     }
 
     // Try backend API login first
@@ -129,11 +130,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ 
+          email, 
+          password,
+          totp_code: totpCode 
+        }),
       });
 
       if (response.ok) {
         const data = await response.json();
+        
+        // Check if 2FA is required
+        if (data.requires_2fa && !totpCode) {
+          return { requires_2fa: true };
+        }
+        
         const user = {
           id: data.user.id,
           email: data.user.email,
@@ -143,10 +154,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('auth_token', data.access_token);
         localStorage.setItem('auth_user', JSON.stringify(user));
         setUser(user);
-        return;
+        return {};
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Login failed');
       }
-    } catch (backendError) {
-      console.log('Backend login failed, trying Supabase:', backendError);
+    } catch (backendError: any) {
+      console.log('Backend login failed:', backendError);
+      // If backend fails with specific error, throw it
+      if (backendError.message && !backendError.message.includes('fetch')) {
+        throw backendError;
+      }
     }
 
     // Fall back to Supabase auth if backend fails
@@ -162,9 +180,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) {
       throw error;
     }
+    
+    return {};
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, fullName: string, phoneNumber?: string) => {
     // Allow demo user "signup" (just logs in)
     if (email === DEMO_USER.email) {
       const demoUser = {
@@ -174,7 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(demoUser));
       setUser(demoUser);
-      return;
+      return {};
     }
 
     // Try backend API signup first
@@ -187,7 +207,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ 
           email, 
           password, 
-          full_name: fullName 
+          full_name: fullName,
+          phone_number: phoneNumber || null
         }),
       });
 
@@ -197,12 +218,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           id: data.user.id,
           email: data.user.email,
           name: data.user.full_name || data.user.email,
+          phone_number: data.user.phone_number,
         };
         // Store token and user
         localStorage.setItem('auth_token', data.access_token);
         localStorage.setItem('auth_user', JSON.stringify(user));
         setUser(user);
-        return;
+        
+        // Return QR code, 2FA status, and OTP info
+        return {
+          qr_code: data.qr_code,
+          requires_2fa: data.requires_2fa,
+          otp_sent: data.otp_sent,
+          otp_code_demo: data.otp_code_demo
+        };
       } else {
         const errorData = await response.json();
         const errorMessage = errorData.detail || errorData.message || 'Signup failed';
@@ -240,6 +269,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) {
       throw error;
     }
+    
+    return {};
   };
 
   const signOut = async () => {
