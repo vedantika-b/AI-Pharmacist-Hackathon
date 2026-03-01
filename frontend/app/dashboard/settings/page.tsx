@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Bell, Shield, Eye, EyeOff, Key, Smartphone } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
-import { getCurrentUser } from "@/lib/supabase"
+import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
 import QRCode from "qrcode"
 import { 
@@ -28,6 +28,7 @@ interface NotificationPreferences {
 
 export default function SettingsPage() {
   const { language } = useLanguage()
+  const { user: authUser, loading: authLoading } = useAuth()
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -66,34 +67,44 @@ export default function SettingsPage() {
   // Fetch user data on mount
   useEffect(() => {
     const fetchUserData = async () => {
+      // Wait for auth to finish loading
+      if (authLoading) {
+        return
+      }
+
       try {
         setLoading(true)
-        const { user } = await getCurrentUser()
         
-        if (!user?.id) {
-          setError("Unable to load user information")
+        if (!authUser?.id) {
+          setError("Please log in to access settings")
           setLoading(false)
           return
         }
 
-        setUserId(user.id)
+        setUserId(authUser.id)
         
         // Fetch notification preferences
-        const notificationsData = await getNotificationPreferences(user.id).catch(() => null)
-
-        if (notificationsData) {
-          setNotifications(notificationsData as NotificationPreferences)
+        try {
+          const notificationsData = await getNotificationPreferences(authUser.id)
+          if (notificationsData) {
+            setNotifications(notificationsData as NotificationPreferences)
+          }
+        } catch (err) {
+          // Silently fail if notifications can't be loaded
+          console.log("Could not load notification preferences:", err)
         }
 
+        setError(null)
         setLoading(false)
       } catch (err) {
+        console.error("Settings load error:", err)
         setError("Failed to load settings")
         setLoading(false)
       }
     }
 
     fetchUserData()
-  }, [])
+  }, [authUser, authLoading])
 
   const handleNotificationToggle = async (key: keyof NotificationPreferences) => {
     if (!userId) return
@@ -152,11 +163,8 @@ export default function SettingsPage() {
 
   // Open 2FA dialog and generate QR code
   const handle2FADialogOpen = async () => {
-    if (!twoFactorEnabled && userId) {
-      const { user } = await getCurrentUser()
-      if (user?.email) {
-        await generateQRCode(user.email)
-      }
+    if (!twoFactorEnabled && authUser?.email) {
+      await generateQRCode(authUser.email)
     }
     setShow2FADialog(true)
   }
@@ -268,10 +276,10 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-muted-foreground">{t('loadingSettings', language)}</p>
+        <p className="text-muted-foreground">{t('loading', language)}</p>
       </div>
     )
   }

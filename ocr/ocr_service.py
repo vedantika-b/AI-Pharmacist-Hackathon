@@ -351,23 +351,157 @@ def parse_medications(text: str) -> List[Dict]:
 
 
 # ----------------------------
-# METADATA EXTRACTION
+# METADATA EXTRACTION (ENHANCED)
 # ----------------------------
 def extract_metadata(text: str):
-    # Date extraction
-    date_match = re.search(r'(\d{2}[/-]\d{2}[/-]\d{4})', text)
+    """Enhanced metadata extraction supporting Marathi/Hindi prescriptions"""
+    
+    # Date extraction - multiple formats
     prescription_date = ""
-    if date_match:
-        try:
-            prescription_date = datetime.strptime(date_match.group(1), "%d/%m/%Y").strftime("%Y-%m-%d")
-        except:
-            prescription_date = ""
+    
+    # Try various date formats
+    date_patterns = [
+        r'दि\.?\s*:?\s*(\d{1,2}[/|-]\d{1,2}[/|-]\d{4})',  # Marathi: दि.: 24/2/2026
+        r'Date\s*:?\s*(\d{1,2}[/|-]\d{1,2}[/|-]\d{4})',   # English: Date: 24/2/2026
+        r'(\d{1,2}[/|-]\d{1,2}[/|-]\d{4})',                # Standalone: 24/2/2026
+        r'(\d{1,2}[/|-]\d{1,2}[/|-]\d{2})',                # Short year: 24/2/26
+    ]
+    
+    for pattern in date_patterns:
+        date_match = re.search(pattern, text)
+        if date_match:
+            date_str = date_match.group(1)
+            try:
+                # Try different date formats
+                for fmt in ["%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y"]:
+                    try:
+                        parsed_date = datetime.strptime(date_str, fmt)
+                        prescription_date = parsed_date.strftime("%d/%m/%Y")
+                        break
+                    except:
+                        continue
+                if prescription_date:
+                    break
+            except:
+                continue
+    
+    # Doctor name extraction - support Marathi/Hindi names
+    doctor_name = ""
+    doctor_patterns = [
+        r'डॉ\.?\s*([^\n\r]{5,40})',          # Marathi: डॉ. Name
+        r'Dr\.?\s+([A-Za-z\s\.]+)',          # English: Dr. Name
+        r'डॉक्टर\s+([^\n\r]{5,40})',         # डॉक्टर Name
+    ]
+    
+    for pattern in doctor_patterns:
+        doctor_match = re.search(pattern, text)
+        if doctor_match:
+            doctor_name = doctor_match.group(0).strip()[:50]  # Limit length
+            break
+    
+    # Patient name extraction
+    patient_name = ""
+    patient_patterns = [
+        r'पेशंटचे\s*नाव\s*:?\s*([^\n\r]{3,40})',  # Marathi: पेशंटचे नाव
+        r'Patient\s*Name\s*:?\s*([A-Za-z\s\.]+)',  # English
+        r'रुग्णाचे\s*नाव\s*:?\s*([^\n\r]{3,40})',  # रुग्णाचे नाव
+    ]
+    
+    for pattern in patient_patterns:
+        patient_match = re.search(pattern, text)
+        if patient_match:
+            patient_name = patient_match.group(1).strip()[:40]
+            break
+    
+    return prescription_date, doctor_name, patient_name
 
-    # Doctor name (basic heuristic)
-    doctor_match = re.search(r'(Dr\.?\s+[A-Za-z\s]+)', text)
-    doctor_name = doctor_match.group(0) if doctor_match else ""
 
-    return prescription_date, doctor_name
+# ----------------------------
+# BLANK PRESCRIPTION DETECTION
+# ----------------------------
+def is_blank_prescription(text: str) -> bool:
+    """Detect if this is a blank prescription form vs filled prescription"""
+    blank_indicators = [
+        'name:', 'hospital no', 'patient name', 'prescription',
+        'date:', 'age:', 'sex:', 'doctor', 'signature',
+        'client', 'bill', 'receipt', 'cashier'
+    ]
+    
+    # Count how many blank form fields are present
+    field_count = sum(1 for indicator in blank_indicators if indicator in text.lower())
+    
+    # If we have many blank fields but no actual content, it's likely a blank form
+    has_numbers = bool(re.search(r'\d{2,}', text))  # Check for dosages/quantities
+    word_count = len(text.split())
+    
+    # Heuristic: If >4 blank fields, few numbers, and short text = blank form
+    if field_count >= 4 and word_count < 100:
+        return True
+    if field_count >= 3 and not has_numbers:
+        return True
+        
+    return False
+
+
+# ----------------------------
+# FORMATTED OUTPUT GENERATOR (ENHANCED)
+# ----------------------------
+def format_prescription_output(response: dict) -> dict:
+    """Format the prescription data in a clean, organized way with smart messages"""
+    
+    is_blank = is_blank_prescription(response["extracted_text"])
+    has_medicines = len(response["medications"]) > 0
+    
+    # Determine status message
+    if is_blank:
+        status_message = "⚠️ Blank prescription form detected"
+        helpful_note = "Please upload a filled prescription with medicine details written on it."
+    elif not has_medicines:
+        status_message = "⚠️ No medicines found"
+        helpful_note = "The image might be unclear, or medicines might be handwritten. Try uploading a clearer image."
+    elif has_medicines and response["confidence"] < 0.6:
+        status_message = "⚠️ Low confidence detection"
+        helpful_note = "Some medicines detected but image quality is poor. Please verify the results."
+    else:
+        status_message = "✅ Prescription analyzed successfully"
+        helpful_note = f"Found {len(response['medications'])} medicine(s). Please verify the details below."
+    
+    formatted = {
+        "status": "blank_form" if is_blank else response["status"],
+        "message": status_message,
+        "note": helpful_note,
+        "confidence": response["confidence"],
+        "summary": {
+            "date": response["metadata"].get("prescription_date") or "Not found",
+            "doctor": response["metadata"].get("doctor_name") or "Not found",
+            "patient": response["metadata"].get("patient_name") or "Not found",
+            "total_medicines": len(response["medications"]),
+            "image_quality": response["metadata"].get("image_quality", "fair"),
+            "is_blank_form": is_blank
+        },
+        "medicines": [],
+        "raw_data": {
+            "extracted_text": response["extracted_text"][:500] + "..." if len(response["extracted_text"]) > 500 else response["extracted_text"],
+            "has_handwriting": response["metadata"].get("has_handwriting", False),
+            "text_length": len(response["extracted_text"])
+        }
+    }
+    
+    # Format each medicine nicely
+    if has_medicines:
+        for idx, med in enumerate(response["medications"], 1):
+            formatted_med = {
+                "sno": idx,
+                "name": med.get("name", "Unknown").title(),
+                "dosage": med.get("dosage") or "Not specified",
+                "frequency": med.get("frequency") or "Not specified",
+                "duration": med.get("duration") or "Not specified",
+                "instructions": med.get("instructions", ""),
+                "confidence": f"{int(med.get('confidence', 0) * 100)}%"
+            }
+            formatted["medicines"].append(formatted_med)
+    
+    return formatted
 
 
 # ----------------------------
@@ -382,6 +516,7 @@ def process_prescription_image(image_path: str) -> dict:
         "metadata": {
             "prescription_date": "",
             "doctor_name": "",
+            "patient_name": "",
             "image_quality": "poor",
             "has_handwriting": False
         },
@@ -399,7 +534,7 @@ def process_prescription_image(image_path: str) -> dict:
         return response
 
     medications = parse_medications(text)
-    prescription_date, doctor_name = extract_metadata(text)
+    prescription_date, doctor_name, patient_name = extract_metadata(text)
 
     response.update({
         "status": "success" if medications else "partial",
@@ -409,9 +544,11 @@ def process_prescription_image(image_path: str) -> dict:
         "metadata": {
             "prescription_date": prescription_date,
             "doctor_name": doctor_name,
+            "patient_name": patient_name,
             "image_quality": image_quality,
             "has_handwriting": has_handwriting
         }
     })
-
-    return response
+    
+    # Return formatted output
+    return format_prescription_output(response)

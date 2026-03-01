@@ -98,7 +98,8 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name}", extra={"structured": startup_data})
     
     # Initialize database pool (optional for direct access)
-    if settings.database_url and settings.database_url != "postgresql://postgres:password@db.your-project.supabase.co:5432/postgres":
+    # DATABASE_URL must be uncommented in .env to enable this
+    if settings.database_url:
         try:
             pool = await DatabasePool.get_pool()
             logger.info("Database pool initialized", extra={"structured": {"pool_size": settings.db_pool_size}})
